@@ -1,0 +1,2418 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Civilization Evolution Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --panel: rgba(18, 26, 36, 0.86);
+    --line: rgba(255, 255, 255, 0.12);
+    --text: #eef3f8;
+    --muted: #9fb0c2;
+    --accent: #ffcf4a;
+    --good: #46e26a;
+    --bad: #ff5a4a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #9fd3f0; color: var(--text);
+    font-family: 'M PLUS Rounded 1c', 'Hiragino Maru Gothic ProN', 'Meiryo', sans-serif; font-size: 13px; }
+  canvas#c { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  [hidden] { display: none !important; }
+  button { font: inherit; color: inherit; background: rgba(255,255,255,0.08); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 10px; cursor: pointer; transition: background .15s, transform .08s; }
+  button:hover { background: rgba(255,255,255,0.16); }
+  button:active { transform: scale(0.97); }
+  button.primary { background: linear-gradient(180deg, #ffd65a, #f0a92a); color: #3a2400; font-weight: 800; border: none; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.on { background: rgba(255, 207, 74, 0.3); border-color: var(--accent); }
+  select, input[type=range] { font: inherit; }
+  select { background: #253344; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.25); }
+
+  /* ---- 始める前の画面 ---- */
+  .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20;
+    background: radial-gradient(ellipse at center, rgba(20,40,60,0.55), rgba(10,15,25,0.85)); padding: 16px; overflow: auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 24px 28px; max-width: 860px; width: 100%; }
+  .card h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .02em; }
+  .card .sub { margin: 0 0 18px; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 720px) { .grid2 { grid-template-columns: 1fr; } }
+  .card section { background: rgba(255,255,255,0.04); border-radius: 12px; padding: 12px 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .card label { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 8px; margin: 8px 0; }
+  .erow { display: grid; grid-template-columns: 14px 64px 1fr 1fr; gap: 6px; align-items: center; margin: 6px 0; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1px solid rgba(0,0,0,0.3); }
+  .card .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 18px; gap: 12px; flex-wrap: wrap; }
+  .card .actions button.primary { font-size: 16px; padding: 10px 22px; }
+  #best { color: var(--muted); }
+
+  /* ---- 地形づくり ---- */
+  #editbar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 10px 14px; z-index: 5; max-width: calc(100% - 32px); }
+  #editbar .title { font-weight: 700; margin-bottom: 6px; }
+  #editbar .hint { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  #editbar .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+  #edit-msg { color: var(--bad); font-weight: 700; min-height: 1em; }
+
+  /* ---- ゲーム中 ---- */
+  #topbar { position: fixed; top: 10px; left: 50%; transform: translateX(-50%); padding: 8px 14px; display: flex; gap: 14px;
+    align-items: center; z-index: 5; white-space: nowrap; }
+  #topbar .res b { font-size: 15px; min-width: 38px; display: inline-block; }
+  #topbar .era { color: var(--accent); font-weight: 800; }
+  #topbar .speed button { padding: 3px 8px; }
+  #leftpanel { position: fixed; left: 10px; top: 64px; width: 224px; padding: 10px; z-index: 5; max-height: calc(100% - 74px); overflow: auto; }
+  #rightpanel { position: fixed; right: 10px; top: 64px; width: 230px; padding: 10px; z-index: 5; max-height: calc(100% - 200px); overflow: auto; }
+  h4 { margin: 10px 0 6px; font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .05em; }
+  #era-box { background: linear-gradient(135deg, rgba(255,207,74,0.18), rgba(255,207,74,0.04)); border: 1px solid rgba(255,207,74,0.35);
+    border-radius: 10px; padding: 8px 10px; }
+  #era-cur { font-size: 16px; font-weight: 800; color: var(--accent); }
+  #btn-era { width: 100%; margin-top: 6px; }
+  #era-cost { margin-top: 4px; font-size: 12px; line-height: 1.6; }
+  #hint { margin-top: 8px; padding: 6px 8px; border-radius: 8px; background: rgba(70,226,106,0.12); font-size: 12px; }
+  .blist { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .bbtn { display: flex; flex-direction: column; align-items: flex-start; padding: 5px 7px; text-align: left; min-height: 48px; }
+  .bbtn .nm { font-weight: 700; }
+  .bbtn .cs { font-size: 11px; color: var(--muted); }
+  .bbtn .cs .no { color: var(--bad); }
+  .bbtn.lack { opacity: 0.6; }
+  .bbtn.locked { opacity: 0.35; }
+  .bbtn .key { font-size: 10px; color: var(--muted); margin-left: 4px; }
+  .civ { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .civ.dead { opacity: 0.35; }
+  .civ .ch { display: flex; align-items: center; gap: 6px; }
+  .civ .ce { margin-left: auto; font-size: 11px; color: var(--accent); }
+  .hpb { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin: 4px 0; overflow: hidden; }
+  .hpb i { display: block; height: 100%; background: var(--good); width: 100%; transition: width .2s; }
+  .civ .cf { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .civ .cf button { padding: 2px 8px; font-size: 11px; }
+  #cmd button { width: 100%; margin: 4px 0; }
+  #cmd .ratio { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+  #cmd .ratio input { flex: 1; min-width: 0; }
+  #cmd-ratio-v { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  #cmd-target { font-size: 12px; margin-top: 4px; color: var(--accent); }
+  #cmd-state { font-size: 12px; color: var(--muted); line-height: 1.5; }
+  #topbar .rate { font-size: 11px; margin-left: 2px; }
+  #info button { margin-top: 6px; padding: 4px 8px; font-size: 12px; }
+  #info .cs .no { color: var(--bad); }
+  #log { position: fixed; left: 244px; bottom: 12px; z-index: 5; display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: 420px; }
+  #log div { background: var(--panel); border-radius: 8px; padding: 5px 10px; font-size: 12px; animation: fadein .25s; transition: opacity 1s; }
+  #log div.warn { border-left: 4px solid var(--bad); }
+  #log div.good { border-left: 4px solid var(--good); }
+  #log div.era { border-left: 4px solid var(--accent); }
+  #info { position: fixed; right: 10px; bottom: 12px; width: 230px; padding: 8px 10px; z-index: 5; font-size: 12px; line-height: 1.6; }
+  #banner { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; z-index: 8; pointer-events: none; opacity: 0; }
+  #banner.show { animation: banner 3.2s ease-out forwards; }
+  #banner .t { font-size: 44px; font-weight: 800; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 30px rgba(255,207,74,0.9); }
+  #banner .s { font-size: 16px; margin-top: 6px; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,0.6); }
+  #alert { position: fixed; inset: 0; pointer-events: none; z-index: 4; box-shadow: inset 0 0 0 0 rgba(255,60,40,0); }
+  #alert.on { animation: alert 1.6s ease-out; }
+  @keyframes banner { 0% { opacity: 0; transform: translateX(-50%) scale(0.6); } 12% { opacity: 1; transform: translateX(-50%) scale(1.08); }
+    20% { transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-20px); } }
+  @keyframes alert { 0% { box-shadow: inset 0 0 120px 30px rgba(255,60,40,0.7); } 100% { box-shadow: inset 0 0 0 0 rgba(255,60,40,0); } }
+  @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  #gameover .card { max-width: 440px; text-align: center; }
+  #gameover .stat { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+  #gameover .big { font-size: 30px; font-weight: 800; color: var(--accent); margin: 8px 0 14px; }
+  #help { position: fixed; right: 10px; top: 10px; z-index: 5; padding: 4px 10px; font-size: 11px; color: var(--muted); }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<!-- 始める前の設定 -->
+<div id="setup" class="screen">
+  <div class="card">
+    <h1>Civilization Evolution Simulator</h1>
+    <p class="sub">自分の文明を育て、時代を進め、敵の文明の攻撃から守りきろう。首都が落ちるまで、どこまで進化できるか？</p>
+    <div class="grid2">
+      <section>
+        <h3>🌍 世界</h3>
+        <label>マップの大きさ
+          <select id="s-size"><option value="40">小さい</option><option value="56" selected>ふつう</option><option value="72">大きい</option></select></label>
+        <label>山の多さ <input type="range" id="s-mountain" min="0" max="100" value="45"></label>
+        <label>水の多さ <input type="range" id="s-water" min="0" max="100" value="45"></label>
+        <label>森の多さ <input type="range" id="s-forest" min="0" max="100" value="55"></label>
+        <label>岩場の多さ <input type="range" id="s-rock" min="0" max="100" value="50"></label>
+        <label>最初の攻撃まで
+          <select id="s-grace"><option value="60">60秒</option><option value="120" selected>120秒</option><option value="240">240秒</option></select></label>
+      </section>
+      <section>
+        <h3>⚔ 敵の文明 <input type="range" id="s-enemies" min="1" max="5" value="3"> <span id="s-enemies-v">3</span>つ</h3>
+        <div id="enemy-rows"></div>
+        <p style="color:var(--muted);font-size:12px;margin:10px 0 0">
+          好戦的：よく攻めてくる／発展重視：タレットと研究が多い<br>発展の速さ：資源の集まる速さが変わる</p>
+      </section>
+    </div>
+    <div class="actions">
+      <span id="best"></span>
+      <button id="btn-to-edit" class="primary">地形づくりへ ▶</button>
+    </div>
+  </div>
+</div>
+
+<!-- 地形づくり -->
+<div id="editbar" class="panel" hidden>
+  <div class="title">🛠 地形づくり — 始める前だけ、自由に地形をいじれます</div>
+  <div class="hint">左ドラッグ：塗る ／ 右ドラッグ：回転 ／ ホイール：拡大 ／ WASD・中ドラッグ：移動 ／ 首都のまわりは塗れません</div>
+  <div class="row" id="brushes"></div>
+  <div class="row">ブラシ：<span id="brush-sizes"></span>
+    <span style="flex:1"></span>
+    <button id="btn-regen">🎲 作り直す</button>
+    <button id="btn-back">◀ 設定へ</button>
+    <button id="btn-start" class="primary">この世界ではじめる ▶</button></div>
+  <div id="edit-msg"></div>
+</div>
+
+<!-- ゲーム中の画面 -->
+<div id="hud" hidden>
+  <div id="topbar" class="panel">
+    <span class="res" title="食料：兵士を作る・兵士が毎秒食べる。（）は1秒あたりの増減">🍖 <b id="r-food">0</b><span class="rate" id="r-food-rate"></span></span>
+    <span class="res" title="木材：建物に使う">🪵 <b id="r-wood">0</b></span>
+    <span class="res" title="石：建物・タレットに使う">🪨 <b id="r-stone">0</b></span>
+    <span class="res" title="知識：時代を進めるのに使う">📘 <b id="r-know">0</b></span>
+    <span class="res" title="兵士の数 / 上限（家でふえる）">👥 <b id="r-pop">0</b></span>
+    <span class="res" title="建物を建てている兵士の数">🔨 <b id="r-work">0</b></span>
+    <span class="era" id="t-era"></span>
+    <span id="t-year"></span>
+    <span class="speed"><button data-speed="0">⏸</button><button data-speed="1" class="on">▶</button><button data-speed="2">▶▶</button><button data-speed="4">▶▶▶</button></span>
+  </div>
+  <div id="leftpanel" class="panel">
+    <div id="era-box">
+      <div id="era-cur"></div>
+      <button id="btn-era" class="primary"></button>
+      <div id="era-cost"></div>
+    </div>
+    <div id="hint"></div>
+    <h4>建てる（自分の領土の草原に。兵士が建てに行く）</h4>
+    <div class="blist" id="build-list"></div>
+    <h4>地形を変える</h4>
+    <div class="blist" id="tool-list"></div>
+  </div>
+  <div id="rightpanel" class="panel">
+    <h4 style="margin-top:0">文明</h4>
+    <div id="civ-list"></div>
+    <h4>兵士への命令</h4>
+    <div id="cmd">
+      <div class="ratio"><span>🛡守り</span><input type="range" id="cmd-ratio" min="0" max="100" step="10" value="0"><span>⚔攻撃</span></div>
+      <div id="cmd-ratio-v"></div>
+      <div id="cmd-target"></div>
+      <button id="cmd-def">🛡 全員もどれ（攻撃 0%）</button>
+      <div id="cmd-state"></div>
+    </div>
+  </div>
+  <div id="log"></div>
+  <div id="info" class="panel"></div>
+  <div id="banner"><div class="t"></div><div class="s"></div></div>
+  <div id="alert"></div>
+</div>
+
+<div id="gameover" class="screen" hidden>
+  <div class="card">
+    <h1>首都が落ちた…</h1>
+    <div class="big" id="go-era"></div>
+    <div class="stat"><span>生きのびた年数</span><b id="go-years"></b></div>
+    <div class="stat"><span>倒した敵</span><b id="go-kills"></b></div>
+    <div class="stat"><span>ほろぼした文明</span><b id="go-civs"></b></div>
+    <div class="stat"><span>自己ベスト</span><b id="go-best"></b></div>
+    <div class="actions" style="justify-content:center"><button id="btn-retry" class="primary">もう一度あそぶ</button></div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// =====================================================================
+// 定数・データ
+// =====================================================================
+const T = { GRASS: 0, FOREST: 1, ROCK: 2, MOUNTAIN: 3, WATER: 4 };
+const TERRAIN = [
+  { name: '草原', color: 0x8cc05c, h: 0.35, pass: true, icon: '🟩' },
+  { name: '森',   color: 0x5f9a46, h: 0.35, pass: true, icon: '🌲' },
+  { name: '岩場', color: 0xa8a28f, h: 0.42, pass: true, icon: '🪨' },
+  { name: '山',   color: 0x8f8373, h: 0.5,  pass: false, icon: '⛰' },
+  { name: '水',   color: 0x3f8fd4, h: 0.12, pass: false, icon: '🌊' },
+];
+const INF = 1e9;
+const RES_ICON = { food: '🍖', wood: '🪵', stone: '🪨', know: '📘' };
+const CIV_DEFS = [
+  { name: 'あなたの国', color: 0x2fbf62, css: '#3cd46f' },
+  { name: '赤の国', color: 0xd9443a, css: '#ff5a4a' },
+  { name: '青の国', color: 0x3a74d9, css: '#5a92ff' },
+  { name: '黄の国', color: 0xe3b92e, css: '#f2cf4a' },
+  { name: '紫の国', color: 0x9152cc, css: '#b27bf0' },
+  { name: '白の国', color: 0xe6e6e6, css: '#eeeeee' },
+];
+const PERSONALITY = {
+  aggressive: { name: '好戦的',   wave: 45,  barracks: 2, turret: 0.7, lab: 0.8 },
+  balanced:   { name: 'バランス', wave: 70,  barracks: 1, turret: 1.0, lab: 1.0 },
+  builder:    { name: '発展重視', wave: 105, barracks: 0, turret: 1.6, lab: 1.6 },
+};
+const DEFAULT_PERS = ['aggressive', 'balanced', 'builder', 'balanced', 'aggressive'];
+
+// 時代。兵士・タレット・建物の見た目がすべて変わる
+const ERAS = [
+  { name: '石器時代', wall: 0x9b7a4e,
+    unit: { hp: 30, atk: 5, range: 1.0, speed: 1.3, cd: 1.0 },
+    turret: { name: '投石台', range: 3.5, dmg: 6, cd: 1.3, splash: 0, shot: 0x8a7a66, speed: 9, arc: 1.4 }, cost: null },
+  { name: '青銅器時代', wall: 0xb48a55, unlock: '射撃場（弓兵）・弓の塔・壁が使える！ 古い建物は「改修」で新しくなる',
+    unit: { hp: 45, atk: 8, range: 1.0, speed: 1.4, cd: 0.9 },
+    turret: { name: '弓の塔', range: 4.5, dmg: 8, cd: 0.9, splash: 0, shot: 0xe8dcb0, speed: 14, arc: 0.6 },
+    cost: { food: 150, wood: 150, know: 60 } },
+  { name: '中世', wall: 0xa7a39a, unlock: '厩舎（騎兵）・バリスタ・市場が使える！',
+    unit: { hp: 70, atk: 12, range: 1.1, speed: 1.4, cd: 0.9 },
+    turret: { name: 'バリスタ', range: 5, dmg: 16, cd: 1.1, splash: 0, shot: 0xcfc4a6, speed: 16, arc: 0.3 },
+    cost: { food: 450, wood: 450, stone: 250, know: 250 } },
+  { name: '火薬の時代', wall: 0xa0705a, unlock: '砲兵工場（大砲兵）・大砲・シールド・爆破が使える！ 歩兵は銃兵に',
+    unit: { hp: 90, atk: 15, range: 3.5, speed: 1.5, cd: 1.3, shot: 0x3a3a3a },
+    turret: { name: '大砲', range: 6, dmg: 30, cd: 1.8, splash: 1.6, shot: 0x2a2a2a, speed: 10, arc: 1.2 },
+    cost: { food: 1000, wood: 900, stone: 850, know: 700 } },
+  { name: '近代', wall: 0x8b949c, unlock: '戦車工場・機関銃・工場が使える！ 山や湖も作れる',
+    unit: { hp: 130, atk: 20, range: 4.5, speed: 1.7, cd: 1.0, shot: 0xffd84a },
+    turret: { name: '機関銃', range: 6, dmg: 7, cd: 0.18, splash: 0, shot: 0xffd84a, speed: 24, arc: 0 },
+    cost: { food: 2000, wood: 1700, stone: 1800, know: 1600 } },
+  { name: '未来', wall: 0xe4edf3, unlock: 'ロボット工場・レーザー砲・テレポーターが使える！',
+    unit: { hp: 200, atk: 32, range: 5, speed: 2.0, cd: 0.9, shot: 0x4ff0ff },
+    turret: { name: 'レーザー砲', range: 7.5, dmg: 28, cd: 0.45, splash: 0.8, shot: 0x4ff0ff, speed: 30, arc: 0 },
+    cost: { food: 3800, wood: 3200, stone: 3500, know: 3400 } },
+];
+
+// 歩兵は「作った兵舎の時代」で名前と強さが決まる（強さは ERAS[].unit）
+const INF_NAMES = ['戦士', '槍兵', '剣士', '銃兵', '小銃兵', '光線兵'];
+// 時代ごとに増える兵。era より新しい時代の建物で作ると、少し強くなる
+const UNITS = {
+  archer:  { name: '弓兵', era: 1, hp: 38, atk: 7, range: 3.8, speed: 1.3, cd: 1.2, shot: 0xe8dcb0, arc: 0.5,
+             time: 9, upkeep: 0.18, cost: { food: 30, wood: 25 } },
+  cavalry: { name: '騎兵', era: 2, hp: 130, atk: 15, range: 1.1, speed: 2.9, cd: 0.9,
+             time: 12, upkeep: 0.35, cost: { food: 70, wood: 30 } },
+  cannon:  { name: '大砲兵', era: 3, hp: 70, atk: 40, range: 5.5, speed: 1.0, cd: 3.2, splash: 1.0, vsB: 3, shot: 0x2a2a2a, arc: 1.0,
+             time: 15, upkeep: 0.4, cost: { food: 80, wood: 60, stone: 60 } },
+  tank:    { name: '戦車', era: 4, hp: 420, atk: 38, range: 4.5, speed: 1.8, cd: 1.6, splash: 0.9, vsB: 1.5, shot: 0xffa040, arc: 0.1,
+             time: 20, upkeep: 0.8, cost: { food: 120, wood: 60, stone: 160 } },
+  robot:   { name: 'ロボット兵', era: 5, hp: 280, atk: 34, range: 5, speed: 2.4, cd: 0.7, shot: 0x4ff0ff, arc: 0,
+             time: 14, upkeep: 0.5, cost: { food: 100, stone: 150, know: 40 } },
+};
+function unitStats(kind, era) {
+  if (kind === 'inf') {
+    const s = ERAS[era].unit;
+    return { ...s, name: INF_NAMES[era], vsB: 1, splash: 0, arc: 0, time: 8,
+      upkeep: +(0.12 + 0.03 * era).toFixed(2), cost: { food: 20 + 5 * era } };
+  }
+  const d = UNITS[kind], k = 1 + 0.15 * Math.max(0, era - d.era);
+  return { ...d, hp: d.hp * k, atk: d.atk * k, splash: d.splash || 0, vsB: d.vsB || 1 };
+}
+
+// time：兵士1人で建てたときの秒数（2人なら半分）
+const BUILD = {
+  farm:     { name: '農場', icon: '🌾', cost: { wood: 25 }, hp: 80, time: 8, desc: '食料 +2/秒（新しい時代に建てたものほど多い）' },
+  lumber:   { name: '木こり小屋', icon: '🪓', cost: { wood: 15, food: 15 }, hp: 80, time: 8, desc: 'となりの森1マスごとに木材 +0.8/秒。森のとなりに建てる' },
+  quarry:   { name: '石切り場', icon: '⛏', cost: { wood: 40 }, hp: 100, time: 10, desc: 'となりの岩場・山1マスごとに石 +0.8/秒。岩場か山のとなりに建てる' },
+  house:    { name: '家', icon: '🏠', cost: { wood: 30 }, hp: 120, time: 8, desc: '兵士の上限 +4' },
+  lab:      { name: '研究所', icon: '🔭', cost: { wood: 60, stone: 30 }, hp: 100, time: 14, desc: '知識 +1/秒。時代を進めるのに必要' },
+  barracks: { name: '兵舎', icon: '⚔', cost: { wood: 70, stone: 20 }, hp: 160, time: 15, trains: 'inf', desc: '歩兵を1人ずつ作る（食料を使う）。建てた時代の歩兵になる' },
+  turret:   { name: 'タレット', icon: '🗼', cost: { wood: 80, stone: 120 }, hp: 220, time: 22, scale: true, desc: '近づいた敵をうつ。建てた時代の形のまま（改修で新しくなる）' },
+  range:    { name: '射撃場', icon: '🏹', era: 1, cost: { wood: 90, stone: 30 }, hp: 140, time: 15, trains: 'archer', desc: '弓兵を作る。遠くからうつ' },
+  wall:     { name: '壁', icon: '🧱', era: 1, cost: { stone: 12 }, hp: 260, time: 4, scale: true, noTerr: true, desc: '敵は通れない（壊すか回り道）。味方は通れる。領土は広がらない' },
+  stable:   { name: '厩舎', icon: '🐎', era: 2, cost: { wood: 140, food: 60 }, hp: 180, time: 18, trains: 'cavalry', desc: '騎兵を作る。速くて強いが、よく食べる' },
+  market:   { name: '市場', icon: '🏪', era: 2, cost: { wood: 150, stone: 100 }, hp: 150, time: 18, desc: '食料・木材・石 +0.6/秒、知識 +0.3/秒' },
+  shield:   { name: 'シールド', icon: '🛡', cost: { wood: 120, stone: 180, know: 60 }, hp: 150, era: 3, time: 20, desc: '半径4.5マスのバリア。中の建物と兵士への攻撃を受け止める' },
+  foundry:  { name: '砲兵工場', icon: '💣', era: 3, cost: { wood: 200, stone: 200 }, hp: 220, time: 22, trains: 'cannon', desc: '大砲兵を作る。建物に3倍のダメージ' },
+  tankf:    { name: '戦車工場', icon: '🛞', era: 4, cost: { wood: 250, stone: 350 }, hp: 300, time: 25, trains: 'tank', desc: '戦車を作る。とても固いが、よく食べる' },
+  factory:  { name: '工場', icon: '🏭', era: 4, cost: { wood: 300, stone: 300 }, hp: 260, time: 25, desc: 'まわり3マスの建物の生産と兵づくりが1.5倍速くなる' },
+  robotf:   { name: 'ロボット工場', icon: '🤖', era: 5, cost: { stone: 450, know: 150 }, hp: 300, time: 25, trains: 'robot', desc: 'ロボット兵を作る' },
+  teleporter: { name: 'テレポーター', icon: '🌀', era: 5, cost: { stone: 300, know: 250 }, hp: 240, time: 25, desc: '攻撃に出た兵士がここへワープしてから進む。敵の近くに建てよう' },
+  capital:  { name: '首都', icon: '🏰', hp: 1000, hidden: true },
+};
+const TOOLS = {
+  blast:    { name: '爆破', icon: '💥', cost: { wood: 40, stone: 30 }, era: 3, desc: '森・岩場・山を草原にする。道を開ける' },
+  mountain: { name: '山を作る', icon: '⛰', cost: { stone: 90 }, era: 4, desc: '通れない山を作る。敵の通り道をしぼれる' },
+  water:    { name: '湖を作る', icon: '🌊', cost: { wood: 40, stone: 50 }, era: 4, desc: '通れない水を作る' },
+};
+const SHIELD_R = 4.5;
+const WALL_COST = 12;      // 敵の壁1マスを「何マスぶんの回り道」とみなすか
+const STARVE_EVERY = 6;    // 食料0のとき、何秒ごとに兵士が1人去るか
+const MAX_CREW = 2;        // 1つの建物を同時に建てられる兵士の数
+
+// =====================================================================
+// 小さな道具
+// =====================================================================
+const $ = (id) => document.getElementById(id);
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function hrand(a, b = 0) {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul((b + 0x632be5ab) | 0, 0xc2b2ae35);
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+function makeNoise(seed) {
+  const r = (x, y) => hrand(Math.imul(x, 73856093) ^ Math.imul(y, 19349663), seed);
+  return (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = r(xi, yi), b = r(xi + 1, yi), c = r(xi, yi + 1), d = r(xi + 1, yi + 1);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  };
+}
+function costText(c, cost) {
+  return Object.entries(cost).map(([k, v]) =>
+    `<span class="${c.res[k] >= v ? '' : 'no'}">${RES_ICON[k]}${v}</span>`).join(' ');
+}
+function canAfford(c, cost) { for (const k in cost) if (c.res[k] < cost[k]) return false; return true; }
+function pay(c, cost) { for (const k in cost) c.res[k] -= cost[k]; }
+function costOf(c, key) {
+  const def = BUILD[key] || TOOLS[key];
+  if (!def.scale) return def.cost;
+  const m = 1 + 0.4 * c.era, o = {};
+  for (const k in def.cost) o[k] = Math.round(def.cost[k] * m);
+  return o;
+}
+// 改修は、新しく建てるときの半分
+function renoCost(c, key) {
+  const o = {}, base = costOf(c, key);
+  for (const k in base) o[k] = Math.ceil(base[k] / 2);
+  return o;
+}
+function nameOf(b) { return b.type === 'turret' ? ERAS[b.era].turret.name : BUILD[b.type].name; }
+const wOf = (t) => t - G.size / 2 + 0.5;          // マス → 世界座標
+const tOf = (w) => Math.floor(w + G.size / 2);     // 世界座標 → マス
+
+// =====================================================================
+// Three.js の準備
+// =====================================================================
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd3f0);
+scene.fog = new THREE.Fog(0x9fd3f0, 70, 170);
+const camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 500);
+camera.position.set(0, 40, 40);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = 1.32;
+controls.minDistance = 6;
+controls.maxDistance = 120;
+controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
+scene.add(new THREE.HemisphereLight(0xe6f4ff, 0x56663a, 1.3));
+const sun = new THREE.DirectionalLight(0xfff0d0, 2.2);
+sun.position.set(30, 55, 22);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -48, right: 48, top: 48, bottom: -48, near: 1, far: 160 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+const matCache = new Map();
+function mat(color, opt) {
+  opt = opt || {};
+  const key = `${color}|${opt.t || 0}|${opt.e || 0}`;
+  let m = matCache.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color, flatShading: true, roughness: 0.85, metalness: 0.05,
+      transparent: !!opt.t, opacity: opt.t || 1, depthWrite: !opt.t,
+      emissive: opt.e ? color : 0x000000, emissiveIntensity: opt.e ? 0.9 : 0,
+    });
+    matCache.set(key, m);
+  }
+  return m;
+}
+const GEO = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  cone4: new THREE.ConeGeometry(1, 1, 4),
+  cone6: new THREE.ConeGeometry(1, 1, 6),
+  cyl6: new THREE.CylinderGeometry(1, 1, 1, 6),
+  cyl8: new THREE.CylinderGeometry(1, 1, 1, 8),
+  cylT: new THREE.CylinderGeometry(0.4, 1, 1, 8),
+  ball: new THREE.IcosahedronGeometry(1, 0),
+  ball1: new THREE.IcosahedronGeometry(1, 1),
+  dode: new THREE.DodecahedronGeometry(1, 0),
+  dome: new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+  torus: new THREE.TorusGeometry(1, 0.14, 6, 18),
+  plane: new THREE.PlaneGeometry(1, 1),
+  planeL: new THREE.PlaneGeometry(1, 1).translate(0.5, 0, 0),
+};
+// 部品をおく（y0 は部品の底の高さ）
+function add(g, geo, color, w, h, d, x = 0, y0 = 0, z = 0, ry = 0, opt) {
+  const m = new THREE.Mesh(geo, mat(color, opt));
+  m.scale.set(w, h, d); m.position.set(x, y0 + h / 2, z); m.rotation.y = ry;
+  if (!opt || !opt.t) { m.castShadow = true; m.receiveShadow = true; }
+  g.add(m); return m;
+}
+function ball(g, color, r, x, y, z, opt, geo = GEO.ball) {
+  const m = new THREE.Mesh(geo, mat(color, opt));
+  m.scale.setScalar(r); m.position.set(x, y, z); m.castShadow = !(opt && opt.t);
+  g.add(m); return m;
+}
+function flag(g, color, x, y0, z, h = 1) {
+  add(g, GEO.cyl6, 0x5a4630, 0.03, h, 0.03, x, y0, z);
+  add(g, GEO.box, color, 0.34, 0.2, 0.02, x + 0.17, y0 + h - 0.24, z);
+}
+
+// ---------------------------------------------------------------------
+// 建物の見た目（時代ごとに変わる）
+// ---------------------------------------------------------------------
+function makeBuilding(type, E, color) {
+  const g = new THREE.Group();
+  let head = null;
+  const wall = ERAS[E].wall;
+  const glass = 0x9fd6ff;
+  switch (type) {
+    case 'capital': {
+      if (E === 0) {
+        add(g, GEO.cone6, wall, 0.85, 1.4, 0.85);
+        add(g, GEO.cone6, 0x7a5a36, 0.45, 0.9, 0.45, 0.75, 0, 0.55);
+        add(g, GEO.cone6, 0x7a5a36, 0.45, 0.9, 0.45, -0.7, 0, 0.5);
+        add(g, GEO.cyl6, 0x6b4f33, 0.09, 1.6, 0.09, 0.2, 0, -0.75);
+        add(g, GEO.box, color, 0.3, 0.3, 0.3, 0.2, 1.5, -0.75);
+        flag(g, color, 0, 1.3, 0, 0.9);
+      } else if (E === 1) {
+        add(g, GEO.box, wall, 1.8, 0.45, 1.8);
+        add(g, GEO.box, wall, 1.3, 0.45, 1.3, 0, 0.45);
+        add(g, GEO.box, wall, 0.8, 0.45, 0.8, 0, 0.9);
+        add(g, GEO.box, color, 0.5, 0.35, 0.5, 0, 1.35);
+        flag(g, color, 0, 1.7, 0, 0.9);
+      } else if (E <= 3) {
+        add(g, GEO.box, wall, 1.5, 0.8, 1.5);
+        add(g, GEO.box, wall, 0.8, 1.7, 0.8);
+        add(g, GEO.cone4, color, 0.62, 0.6, 0.62, 0, 1.7, 0, Math.PI / 4);
+        for (const [x, z] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+          add(g, GEO.cyl8, wall, 0.26, 1.2, 0.26, x, 0, z);
+          add(g, GEO.cone6, color, 0.32, 0.45, 0.32, x, 1.2, z);
+        }
+        if (E === 3) add(g, GEO.cyl8, 0x2a2a2a, 0.08, 0.6, 0.08, 0, 0.9, 0.95).rotation.x = Math.PI / 2;
+        flag(g, color, 0, 2.3, 0, 0.9);
+      } else if (E === 4) {
+        add(g, GEO.box, 0x6d7780, 1.8, 0.3, 1.8);
+        add(g, GEO.box, wall, 0.7, 2.8, 0.7, -0.35, 0.3, -0.3);
+        add(g, GEO.box, glass, 0.72, 0.12, 0.72, -0.35, 1.2, -0.3);
+        add(g, GEO.box, glass, 0.72, 0.12, 0.72, -0.35, 2.1, -0.3);
+        add(g, GEO.box, wall, 0.6, 1.9, 0.6, 0.45, 0.3, 0.3);
+        add(g, GEO.box, color, 0.62, 0.12, 0.62, 0.45, 2.2, 0.3);
+        add(g, GEO.box, color, 0.72, 0.15, 0.72, -0.35, 3.1, -0.3);
+        flag(g, color, -0.35, 3.25, -0.3, 0.8);
+      } else {
+        add(g, GEO.cyl8, 0xcfd8df, 1.0, 0.35, 1.0);
+        add(g, GEO.cylT, wall, 0.45, 3.2, 0.45, 0, 0.35);
+        add(g, GEO.cyl8, color, 0.48, 0.12, 0.48, 0, 1.4);
+        add(g, GEO.cyl8, color, 0.3, 0.12, 0.3, 0, 2.6);
+        ball(g, 0x4ff0ff, 0.28, 0, 3.8, 0, { e: 1 }, GEO.ball1);
+        const ring = add(g, GEO.cyl8, 0x4ff0ff, 0.9, 0.04, 0.9, 0, 2.0, 0, 0, { e: 1, t: 0.6 });
+        ring.userData.spin = true;
+      }
+      break;
+    }
+    case 'house': {
+      if (E === 0) {
+        add(g, GEO.cone6, wall, 0.4, 0.8, 0.4);
+        add(g, GEO.box, color, 0.12, 0.12, 0.12, 0, 0.72, 0);
+      } else if (E <= 2) {
+        add(g, GEO.box, wall, 0.62, 0.45, 0.55);
+        add(g, GEO.cone4, color, 0.5, 0.38, 0.5, 0, 0.45, 0, Math.PI / 4);
+      } else if (E === 3) {
+        add(g, GEO.box, wall, 0.66, 0.75, 0.56);
+        add(g, GEO.cone4, color, 0.5, 0.32, 0.5, 0, 0.75, 0, Math.PI / 4);
+        add(g, GEO.box, 0x6b4a3a, 0.1, 0.4, 0.1, 0.2, 0.8, 0.1);
+      } else if (E === 4) {
+        add(g, GEO.box, wall, 0.6, 1.2, 0.6);
+        add(g, GEO.box, glass, 0.62, 0.1, 0.62, 0, 0.4);
+        add(g, GEO.box, glass, 0.62, 0.1, 0.62, 0, 0.8);
+        add(g, GEO.box, color, 0.64, 0.08, 0.64, 0, 1.2);
+      } else {
+        add(g, GEO.cyl8, wall, 0.3, 0.7, 0.3);
+        ball(g, color, 0.3, 0, 0.7, 0, null, GEO.ball1).scale.y = 0.2;
+        add(g, GEO.cyl8, 0x4ff0ff, 0.31, 0.06, 0.31, 0, 0.45, 0, 0, { e: 1 });
+      }
+      break;
+    }
+    case 'farm': {
+      add(g, GEO.box, 0x7a5a36, 0.92, 0.04, 0.92);
+      const crop = E >= 4 ? 0x6fd65a : 0xe0c24a;
+      for (const z of [-0.28, 0, 0.28]) add(g, GEO.box, crop, 0.82, 0.14, 0.13, 0, 0.04, z);
+      if (E >= 4) add(g, GEO.box, 0xbfefff, 0.86, 0.4, 0.86, 0, 0.04, 0, 0, { t: 0.3 });
+      else add(g, GEO.cyl6, 0x5a4630, 0.03, 0.55, 0.03, 0.4, 0.04, 0.4);
+      if (E < 4) add(g, GEO.box, color, 0.18, 0.12, 0.02, 0.49, 0.45, 0.4);
+      break;
+    }
+    case 'lumber': {
+      add(g, GEO.box, wall, 0.45, 0.35, 0.45, -0.15, 0, -0.15);
+      add(g, GEO.cone4, color, 0.38, 0.3, 0.38, -0.15, 0.35, -0.15, Math.PI / 4);
+      for (let k = 0; k < 3; k++) {
+        const m = add(g, GEO.cyl6, 0x8a5a32, 0.07, 0.5, 0.07, 0.2, 0, 0.2 + k * 0.001);
+        m.rotation.z = Math.PI / 2; m.position.set(0.22, 0.07 + (k === 2 ? 0.12 : 0), 0.12 + (k % 2) * 0.15 + (k === 2 ? 0.07 : 0));
+      }
+      if (E >= 4) { const saw = add(g, GEO.cyl8, 0xcccccc, 0.18, 0.03, 0.18, 0.2, 0.35, -0.25); saw.rotation.x = Math.PI / 2; }
+      break;
+    }
+    case 'quarry': {
+      add(g, GEO.box, wall, 0.4, 0.3, 0.4, -0.2, 0, -0.2);
+      add(g, GEO.box, color, 0.44, 0.06, 0.44, -0.2, 0.3, -0.2);
+      ball(g, 0x9a9a92, 0.16, 0.2, 0.12, 0.15, null, GEO.dode);
+      ball(g, 0x8a8a82, 0.12, 0.35, 0.1, -0.1, null, GEO.dode);
+      ball(g, 0xa5a59c, 0.1, 0.0, 0.08, 0.3, null, GEO.dode);
+      if (E >= 3) {
+        add(g, GEO.box, 0xe0a030, 0.06, 1.0, 0.06, 0.35, 0, 0.35);
+        add(g, GEO.box, 0xe0a030, 0.6, 0.05, 0.05, 0.15, 1.0, 0.35);
+      }
+      break;
+    }
+    case 'lab': {
+      if (E <= 2) {
+        add(g, GEO.cyl8, wall, 0.3, 0.75, 0.3);
+        ball(g, color, 0.3, 0, 0.75, 0, null, GEO.ball1).scale.y = 0.28;
+        const tele = add(g, GEO.cyl6, 0x555555, 0.05, 0.35, 0.05, 0.1, 0.85, 0); tele.rotation.z = -0.7;
+      } else if (E <= 4) {
+        add(g, GEO.box, wall, 0.65, 0.6, 0.55);
+        add(g, GEO.box, color, 0.67, 0.08, 0.57, 0, 0.6);
+        add(g, GEO.cyl6, 0x777777, 0.03, 0.7, 0.03, 0.2, 0.6, 0.1);
+        ball(g, 0xff4040, 0.05, 0.2, 1.32, 0.1, { e: 1 });
+        add(g, GEO.box, glass, 0.67, 0.1, 0.57, 0, 0.3);
+      } else {
+        add(g, GEO.cyl8, wall, 0.25, 0.4, 0.25);
+        const orb = ball(g, 0x4ff0ff, 0.22, 0, 0.8, 0, { e: 1 }, GEO.ball1);
+        orb.userData.float = true;
+      }
+      break;
+    }
+    case 'barracks': {
+      add(g, GEO.box, wall, 0.85, 0.42, 0.6);
+      add(g, GEO.box, color, 0.9, 0.1, 0.66, 0, 0.42);
+      add(g, GEO.box, 0x3a2a1a, 0.2, 0.28, 0.02, 0, 0, 0.31);
+      flag(g, color, -0.35, 0.52, 0.2, 0.7);
+      if (E >= 4) add(g, GEO.box, 0x5b6b4a, 0.3, 0.18, 0.4, 0.28, 0.52, -0.05);
+      break;
+    }
+    case 'turret': {
+      head = new THREE.Group();
+      if (E === 0) {
+        add(g, GEO.box, 0x7a5a36, 0.6, 0.18, 0.6);
+        head.position.y = 0.18;
+        const arm = add(head, GEO.box, 0x8a6a45, 0.08, 0.08, 0.75, 0, 0.1, -0.05);
+        arm.rotation.x = -0.6;
+        ball(head, 0x7a7a70, 0.1, 0, 0.42, 0.26, null, GEO.dode);
+      } else if (E === 1) {
+        for (const [x, z] of [[-0.22, -0.22], [0.22, -0.22], [-0.22, 0.22], [0.22, 0.22]]) add(g, GEO.cyl6, 0x7a5a36, 0.05, 0.9, 0.05, x, 0, z);
+        add(g, GEO.box, wall, 0.62, 0.1, 0.62, 0, 0.9);
+        add(g, GEO.cone4, color, 0.48, 0.35, 0.48, 0, 1.25, 0, Math.PI / 4);
+        head.position.y = 1.0;
+        add(head, GEO.box, 0x6b4a2b, 0.04, 0.2, 0.25, 0, 0, 0.1);
+      } else if (E === 2) {
+        add(g, GEO.cyl8, wall, 0.34, 1.1, 0.34);
+        for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; add(g, GEO.box, wall, 0.12, 0.14, 0.12, Math.cos(a) * 0.3, 1.1, Math.sin(a) * 0.3); }
+        head.position.y = 1.1;
+        add(head, GEO.box, 0x7a5a36, 0.1, 0.1, 0.5, 0, 0.05, 0.05);
+        add(head, GEO.box, 0x7a5a36, 0.45, 0.05, 0.05, 0, 0.1, 0.15);
+        add(g, GEO.box, color, 0.2, 0.12, 0.02, 0, 0.7, 0.35);
+      } else if (E === 3) {
+        add(g, GEO.cyl8, wall, 0.36, 0.35, 0.36);
+        head.position.y = 0.35;
+        add(head, GEO.box, color, 0.34, 0.22, 0.34);
+        const b = add(head, GEO.cyl8, 0x2a2a2a, 0.09, 0.55, 0.09, 0, 0.08, 0.3); b.rotation.x = Math.PI / 2 - 0.15;
+      } else if (E === 4) {
+        add(g, GEO.box, wall, 0.62, 0.45, 0.62);
+        add(g, GEO.box, 0x6d7780, 0.66, 0.06, 0.66, 0, 0.45);
+        head.position.y = 0.51;
+        add(head, GEO.box, color, 0.34, 0.22, 0.38);
+        for (const x of [-0.07, 0.07]) { const b = add(head, GEO.cyl6, 0x222222, 0.035, 0.45, 0.035, x, 0.1, 0.35); b.rotation.x = Math.PI / 2; }
+      } else {
+        add(g, GEO.cylT, wall, 0.35, 0.6, 0.35);
+        head.position.y = 0.6;
+        ball(head, 0x4ff0ff, 0.2, 0, 0.2, 0, { e: 1 }, GEO.ball1);
+        const b = add(head, GEO.cyl8, 0xf0f4f8, 0.06, 0.6, 0.06, 0, 0.15, 0.3); b.rotation.x = Math.PI / 2;
+        add(head, GEO.cyl8, color, 0.1, 0.05, 0.1, 0, 0.35, 0);
+      }
+      g.add(head);
+      break;
+    }
+    case 'shield': {
+      add(g, GEO.cyl8, 0x7d8a96, 0.3, 0.2, 0.3);
+      add(g, GEO.cylT, wall, 0.14, 0.9, 0.14, 0, 0.2);
+      const orb = ball(g, 0x7fe8ff, 0.16, 0, 1.25, 0, { e: 1 }, GEO.ball1);
+      orb.userData.float = true;
+      add(g, GEO.cyl8, color, 0.2, 0.06, 0.2, 0, 0.6);
+      break;
+    }
+    case 'range': {
+      add(g, GEO.box, wall, 0.45, 0.4, 0.4, -0.2, 0, -0.15);
+      add(g, GEO.cone4, color, 0.36, 0.3, 0.36, -0.2, 0.4, -0.15, Math.PI / 4);
+      add(g, GEO.box, 0x6b4a2b, 0.04, 0.32, 0.04, 0.25, 0, 0.2);
+      add(g, GEO.cyl8, 0xf2efe6, 0.18, 0.04, 0.18, 0.25, 0.26, 0.2).rotation.x = Math.PI / 2;
+      add(g, GEO.cyl8, 0xd9443a, 0.09, 0.05, 0.09, 0.25, 0.255, 0.2).rotation.x = Math.PI / 2;
+      break;
+    }
+    case 'wall': {
+      if (E <= 1) {
+        add(g, GEO.box, 0x8a6a45, 0.92, 0.5, 0.92);
+        add(g, GEO.box, color, 0.94, 0.07, 0.94, 0, 0.36);
+        add(g, GEO.cone4, 0x7a5a36, 0.66, 0.16, 0.66, 0, 0.5, 0, Math.PI / 4);
+      } else if (E <= 3) {
+        add(g, GEO.box, wall, 0.96, 0.62, 0.96);
+        for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) add(g, GEO.box, wall, 0.24, 0.16, 0.24, x, 0.62, z);
+        add(g, GEO.box, color, 0.97, 0.06, 0.97, 0, 0.45);
+      } else if (E === 4) {
+        add(g, GEO.box, 0x9aa3ab, 0.96, 0.75, 0.96);
+        add(g, GEO.box, color, 0.97, 0.08, 0.97, 0, 0.55);
+      } else {
+        add(g, GEO.box, 0xcfd8df, 0.96, 0.2, 0.96);
+        add(g, GEO.box, 0x4ff0ff, 0.9, 0.6, 0.9, 0, 0.2, 0, 0, { e: 1, t: 0.45 });
+      }
+      break;
+    }
+    case 'stable': {
+      add(g, GEO.box, wall, 0.8, 0.42, 0.55);
+      add(g, GEO.cone4, color, 0.6, 0.3, 0.46, 0, 0.42, 0, Math.PI / 4).scale.x = 0.62;
+      add(g, GEO.box, 0x3a2a1a, 0.22, 0.3, 0.02, 0, 0, 0.28);
+      ball(g, 0xe0c24a, 0.13, 0.35, 0.1, 0.35, null, GEO.dode);
+      break;
+    }
+    case 'market': {
+      add(g, GEO.box, 0x8a6a45, 0.7, 0.28, 0.4);
+      for (const x of [-0.33, 0.33]) add(g, GEO.cyl6, 0x5a4630, 0.03, 0.6, 0.03, x, 0, -0.15);
+      add(g, GEO.box, color, 0.8, 0.05, 0.5, 0, 0.6, 0.02).rotation.x = 0.25;
+      ball(g, 0xe0c24a, 0.07, -0.18, 0.33, 0.05); ball(g, 0xd9443a, 0.07, 0, 0.33, 0.05); ball(g, 0x6fd65a, 0.07, 0.18, 0.33, 0.05);
+      add(g, GEO.box, 0x8a5a32, 0.18, 0.16, 0.18, 0.3, 0, 0.35);
+      break;
+    }
+    case 'foundry': {
+      add(g, GEO.box, 0x5a5048, 0.8, 0.5, 0.6);
+      add(g, GEO.box, color, 0.82, 0.08, 0.62, 0, 0.5);
+      add(g, GEO.cyl8, 0x3a3430, 0.1, 0.55, 0.1, 0.25, 0.5, -0.15);
+      add(g, GEO.cyl8, 0x2a2a2a, 0.07, 0.4, 0.07, -0.1, 0.12, 0.35).rotation.x = Math.PI / 2 - 0.3;
+      break;
+    }
+    case 'tankf': {
+      add(g, GEO.box, 0x7d8a96, 0.92, 0.55, 0.8);
+      add(g, GEO.box, color, 0.94, 0.1, 0.82, 0, 0.45);
+      add(g, GEO.box, 0x2a2e33, 0.5, 0.36, 0.02, 0, 0, 0.41);
+      break;
+    }
+    case 'factory': {
+      add(g, GEO.box, 0x9a8a7a, 0.86, 0.45, 0.7);
+      for (const x of [-0.28, 0, 0.28]) add(g, GEO.cone4, color, 0.2, 0.2, 0.5, x, 0.45, 0, Math.PI / 4).scale.z = 0.5;
+      for (const x of [-0.3, 0.3]) add(g, GEO.cyl8, 0x6a5a4a, 0.07, 0.7, 0.07, x, 0.45, -0.28);
+      break;
+    }
+    case 'robotf': {
+      add(g, GEO.box, 0xe4edf3, 0.86, 0.5, 0.7);
+      add(g, GEO.box, 0x4ff0ff, 0.88, 0.06, 0.72, 0, 0.3, 0, 0, { e: 1 });
+      ball(g, color, 0.3, 0, 0.5, 0, null, GEO.ball1).scale.y = 0.18;
+      break;
+    }
+    case 'teleporter': {
+      add(g, GEO.cyl8, 0xcfd8df, 0.45, 0.1, 0.45);
+      for (const x of [-0.4, 0.4]) add(g, GEO.box, wall, 0.1, 0.9, 0.1, x, 0.1, 0);
+      const ring = add(g, GEO.torus, 0x4ff0ff, 0.36, 0.36, 0.36, 0, 0.3, 0, 0, { e: 1 });
+      ring.userData.spin = true;
+      add(g, GEO.box, color, 0.9, 0.08, 0.14, 0, 1.0, 0);
+      break;
+    }
+  }
+  return { group: g, head };
+}
+// 建てている途中の足場
+function makeScaffold() {
+  const g = new THREE.Group();
+  for (const [x, z] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) add(g, GEO.box, 0xb08850, 0.05, 0.9, 0.05, x, 0, z);
+  add(g, GEO.box, 0xb08850, 0.86, 0.04, 0.05, 0, 0.6, -0.4);
+  add(g, GEO.box, 0xb08850, 0.86, 0.04, 0.05, 0, 0.6, 0.4);
+  add(g, GEO.box, 0xf2d27a, 0.9, 0.9, 0.9, 0, 0, 0, 0, { t: 0.18 });
+  return g;
+}
+
+// ---------------------------------------------------------------------
+// 兵士の見た目（時代ごとに武器が変わる）
+// ---------------------------------------------------------------------
+function makeUnitMesh(kind, E, color) {
+  const g = new THREE.Group();
+  const dark = new THREE.Color(color).multiplyScalar(0.6).getHex();
+  switch (kind) {
+    case 'archer':
+      add(g, GEO.cone6, color, 0.14, 0.4, 0.14);
+      ball(g, 0xf1c9a0, 0.095, 0, 0.48, 0);
+      add(g, GEO.box, 0x6b4a2b, 0.02, 0.5, 0.1, 0.15, 0.08, 0.04);
+      add(g, GEO.box, 0x8a5a32, 0.07, 0.25, 0.07, -0.05, 0.22, -0.12);
+      return g;
+    case 'cavalry':
+      add(g, GEO.box, 0x7a5030, 0.2, 0.18, 0.5, 0, 0.16, 0);
+      for (const [x, z] of [[-0.07, -0.18], [0.07, -0.18], [-0.07, 0.18], [0.07, 0.18]]) add(g, GEO.box, 0x5a3a22, 0.05, 0.16, 0.05, x, 0, z);
+      add(g, GEO.box, 0x7a5030, 0.1, 0.2, 0.14, 0, 0.26, 0.28).rotation.x = -0.5;
+      add(g, GEO.cone6, color, 0.11, 0.3, 0.11, 0, 0.34, -0.02);
+      ball(g, 0xf1c9a0, 0.08, 0, 0.7, -0.02);
+      add(g, GEO.box, 0xc8c8c8, 0.025, 0.025, 0.6, 0.12, 0.5, 0.2);
+      return g;
+    case 'cannon':
+      for (const x of [-0.14, 0.14]) add(g, GEO.cyl8, 0x5a3a22, 0.11, 0.04, 0.11, x, 0.11, 0).rotation.z = Math.PI / 2;
+      add(g, GEO.cyl8, 0x2a2a2a, 0.07, 0.45, 0.07, 0, 0.14, 0.12).rotation.x = Math.PI / 2 - 0.25;
+      add(g, GEO.cone6, color, 0.1, 0.3, 0.1, 0, 0, -0.28);
+      ball(g, 0xf1c9a0, 0.07, 0, 0.36, -0.28);
+      return g;
+    case 'tank':
+      for (const x of [-0.19, 0.19]) add(g, GEO.box, 0x2a2e33, 0.1, 0.14, 0.62, x, 0);
+      add(g, GEO.box, dark, 0.32, 0.14, 0.56, 0, 0.1);
+      add(g, GEO.box, color, 0.24, 0.12, 0.26, 0, 0.24, -0.04);
+      add(g, GEO.cyl8, 0x2a2e33, 0.035, 0.4, 0.035, 0, 0.28, 0.25).rotation.x = Math.PI / 2;
+      return g;
+    case 'robot':
+      for (const x of [-0.07, 0.07]) add(g, GEO.box, 0xcfd8df, 0.06, 0.24, 0.07, x, 0);
+      add(g, GEO.box, 0xe4edf3, 0.24, 0.24, 0.16, 0, 0.24);
+      add(g, GEO.box, color, 0.25, 0.06, 0.17, 0, 0.36);
+      add(g, GEO.box, 0xe4edf3, 0.14, 0.12, 0.12, 0, 0.48);
+      add(g, GEO.box, 0x4ff0ff, 0.1, 0.03, 0.02, 0, 0.53, 0.06, 0, { e: 1 });
+      add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.4, 0.16, 0.3, 0.12);
+      return g;
+  }
+  add(g, GEO.cone6, color, 0.15, 0.42, 0.15);
+  ball(g, 0xf1c9a0, 0.1, 0, 0.5, 0);
+  if (E >= 2 && E <= 3) ball(g, 0x8a8a8a, 0.105, 0, 0.54, 0).scale.y = 0.06;
+  if (E === 4) ball(g, 0x556b3a, 0.11, 0, 0.55, 0).scale.y = 0.07;
+  if (E === 5) ball(g, 0xf0f4f8, 0.115, 0, 0.52, 0, null, GEO.ball1);
+  switch (E) {
+    case 0: add(g, GEO.box, 0x6b4a2b, 0.05, 0.36, 0.05, 0.14, 0.12, 0.06); break;
+    case 1: add(g, GEO.box, 0xa07a4a, 0.03, 0.8, 0.03, 0.14, 0.02, 0.05);
+      add(g, GEO.cone4, 0xb0b0b0, 0.04, 0.1, 0.04, 0.14, 0.82, 0.05); break;
+    case 2: add(g, GEO.box, 0xc8c8c8, 0.04, 0.36, 0.04, 0.15, 0.12, 0.08);
+      add(g, GEO.box, new THREE.Color(color).multiplyScalar(0.6).getHex(), 0.2, 0.24, 0.04, -0.12, 0.08, 0.1); break;
+    case 3: add(g, GEO.box, 0x5a3a22, 0.04, 0.04, 0.5, 0.1, 0.26, 0.15); break;
+    case 4: add(g, GEO.box, 0x2a2a2a, 0.05, 0.05, 0.48, 0.1, 0.26, 0.15); break;
+    default: add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.46, 0.1, 0.26, 0.14);
+      ball(g, 0x4ff0ff, 0.04, 0.1, 0.285, 0.38, { e: 1 });
+  }
+  return g;
+}
+
+const BAR_BG = new THREE.MeshBasicMaterial({ color: 0x220000, depthTest: false, transparent: true, opacity: 0.75 });
+const BAR_P = new THREE.MeshBasicMaterial({ color: 0x46e26a, depthTest: false, transparent: true });
+const BAR_E = new THREE.MeshBasicMaterial({ color: 0xff5a4a, depthTest: false, transparent: true });
+const BAR_W = new THREE.MeshBasicMaterial({ color: 0xffcf4a, depthTest: false, transparent: true });
+// 建物の上に出るバー（HP・建築の進み具合）。建物の大きさが変わってもずれないように、シーンに直接おく
+function makeBar(w, x, y, z, fgMat) {
+  const g = new THREE.Group(); g.position.set(x, y, z);
+  const bg = new THREE.Mesh(GEO.plane, BAR_BG); bg.scale.set(w + 0.06, 0.15, 1); bg.renderOrder = 998;
+  const fg = new THREE.Mesh(GEO.planeL, fgMat); fg.position.set(-w / 2, 0, 0.001); fg.scale.set(w, 0.09, 1); fg.renderOrder = 999;
+  g.add(bg, fg); g.userData = { fg, w }; g.visible = false;
+  scene.add(g);
+  return g;
+}
+function setBar(bar, show, ratio) {
+  bar.visible = show;
+  if (show) { bar.quaternion.copy(camera.quaternion); bar.userData.fg.scale.x = bar.userData.w * clamp(ratio, 0, 1); }
+}
+
+// =====================================================================
+// ゲームの状態
+// =====================================================================
+let G = null;
+let terrainGroup = null, tileMesh = null, treeMesh = null, mtnMesh = null, snowMesh = null, rockMesh = null;
+
+function newWorld(cfg) {
+  clearWorld();
+  const S = cfg.size, N = S * S;
+  G = {
+    cfg, size: S, tiles: new Uint8Array(N), owner: new Int8Array(N).fill(-1), ownerD: new Float32Array(N),
+    occ: new Array(N).fill(null), civs: [], units: [], buildings: [], projectiles: [], fx: [],
+    unitGrid: Array.from({ length: N }, () => []), time: 0, speed: 1, phase: 'edit',
+    dirtyTerritory: false, dirtyTerrain: false, alertCd: 0, sel: null, pick: null, seed: (Math.random() * 1e9) | 0,
+    maxEra: 0, civKills: 0, unified: false, flows: new Map(),
+  };
+  const total = 1 + cfg.enemies.length;
+  for (let i = 0; i < total; i++) {
+    const d = CIV_DEFS[i], e = cfg.enemies[i - 1];
+    const ang = Math.PI * 0.75 + i * Math.PI * 2 / total, r = S * 0.33;
+    G.civs.push({
+      id: i, name: d.name, color: d.color, css: d.css, isPlayer: i === 0, era: 0,
+      res: { food: 100, wood: 150, stone: 60, know: 0 }, alive: true, capital: null,
+      ratio: 0, attackTarget: null, targetB: null, upkeep: 0, starve: 0, freeT: 0, workT: 0, balT: 0,
+      pers: e ? PERSONALITY[e.pers] : null, growth: e ? e.growth : 1,
+      waveTimer: 0, thinkTimer: 1 + Math.random() * 2, unitCount: 0, popCap: 3, threats: [], kills: 0,
+      cx: Math.round(S / 2 - 0.5 + Math.cos(ang) * r), cz: Math.round(S / 2 - 0.5 + Math.sin(ang) * r),
+    });
+  }
+  G.player = G.civs[0];
+  generateTerrain(G.seed);
+  buildTerrainMeshes();
+  for (const c of G.civs) placeBuilding(c, 'capital', c.cx, c.cz, true);
+  computeTerritory();
+  updateTerrain();
+  focusCamera(0, 0, S * 1.05);
+}
+
+function clearWorld() {
+  if (!G) return;
+  for (const b of G.buildings) removeBuildingVisuals(b);
+  for (const u of G.units) scene.remove(u.mesh);
+  for (const p of G.projectiles) scene.remove(p.m);
+  for (const f of G.fx) scene.remove(f.m);
+  if (terrainGroup) { scene.remove(terrainGroup); tileMesh.material.dispose(); terrainGroup = null; }
+  G = null;
+}
+
+// ---------------------------------------------------------------------
+// 地形
+// ---------------------------------------------------------------------
+function nearCapital(tx, tz, r) {
+  for (const c of G.civs) if (Math.max(Math.abs(tx - c.cx), Math.abs(tz - c.cz)) <= r) return c;
+  return null;
+}
+function generateTerrain(seed) {
+  const { size: S, mountain, water, forest, rock } = G.cfg;
+  const n1 = makeNoise(seed), n2 = makeNoise(seed + 11), n3 = makeNoise(seed + 23);
+  const wl = 0.2 + water * 0.2, ml = 0.82 - mountain * 0.22;
+  for (let z = 0; z < S; z++) for (let x = 0; x < S; x++) {
+    const h = n1(x / 9, z / 9) * 0.65 + n1(x / 4 + 40, z / 4 + 40) * 0.35;
+    let t = T.GRASS;
+    if (h < wl) t = T.WATER;
+    else if (h > ml) t = T.MOUNTAIN;
+    else if (n2(x / 6, z / 6) > 1 - forest * 0.55) t = T.FOREST;
+    else if (n3(x / 3.5, z / 3.5) > 1 - rock * 0.28) t = T.ROCK;
+    G.tiles[z * S + x] = t;
+  }
+  // 首都のまわりを平らにし、近くに森と岩場を用意する（どの国も同じ条件にする）
+  for (const c of G.civs) {
+    for (let dz = -2; dz <= 2; dz++) for (let dx = -2; dx <= 2; dx++) setTile(c.cx + dx, c.cz + dz, T.GRASS);
+    const toC = Math.atan2(S / 2 - c.cz, S / 2 - c.cx);
+    const px = Math.round(Math.cos(toC + 1.2)), pz = Math.round(Math.sin(toC + 1.2));
+    const qx = Math.round(Math.cos(toC - 1.2)), qz = Math.round(Math.sin(toC - 1.2));
+    for (const [ox, oz] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+      const fx = c.cx + px * 4 + ox, fz = c.cz + pz * 4 + oz;
+      if (!nearCapital(fx, fz, 2)) setTile(fx, fz, T.FOREST);
+      const rx = c.cx + qx * 4 + ox, rz = c.cz + qz * 4 + oz;
+      if (!nearCapital(rx, rz, 2) && (ox + oz) % 2 === 0) setTile(rx, rz, T.ROCK);
+    }
+  }
+  ensureConnected();
+}
+function setTile(x, z, t) {
+  if (x < 0 || z < 0 || x >= G.size || z >= G.size) return;
+  G.tiles[z * G.size + x] = t;
+}
+// すべての首都が歩いてつながるように、足りない所へ陸の道をほる
+function ensureConnected() {
+  const P = G.civs[0];
+  for (const c of G.civs) {
+    if (c === P) continue;
+    const d = bfs(P.cx, P.cz);
+    if (d[c.cz * G.size + c.cx] < INF) continue;
+    const steps = Math.max(Math.abs(c.cx - P.cx), Math.abs(c.cz - P.cz)) * 2;
+    for (let s = 0; s <= steps; s++) {
+      const x = Math.round(P.cx + (c.cx - P.cx) * s / steps), z = Math.round(P.cz + (c.cz - P.cz) * s / steps);
+      const i = z * G.size + x;
+      if (!TERRAIN[G.tiles[i]].pass) G.tiles[i] = T.GRASS;
+      if (x + 1 < G.size && !TERRAIN[G.tiles[i + 1]].pass) G.tiles[i + 1] = T.GRASS;
+    }
+  }
+}
+// 4方向の幅優先探索。首都までの歩く距離の地図（フローフィールド）を作る
+function bfs(sx, sz) {
+  const S = G.size, N = S * S, d = new Int32Array(N).fill(INF), q = new Int32Array(N);
+  let h = 0, t = 0;
+  const s = sz * S + sx; d[s] = 0; q[t++] = s;
+  while (h < t) {
+    const i = q[h++], x = i % S, nd = d[i] + 1;
+    const tryJ = (j) => { if (d[j] === INF && TERRAIN[G.tiles[j]].pass) { d[j] = nd; q[t++] = j; } };
+    if (x > 0) tryJ(i - 1);
+    if (x < S - 1) tryJ(i + 1);
+    if (i >= S) tryJ(i - S);
+    if (i < N - S) tryJ(i + S);
+  }
+  return d;
+}
+function wallAt(i) { const b = G.occ[i]; return b && b.type === 'wall' && b.done ? b : null; }
+function blockedFor(civ, i) {
+  if (!TERRAIN[G.tiles[i]].pass) return true;
+  const w = wallAt(i);
+  return !!(w && w.civ !== civ);
+}
+// civ から見た「(tx,tz) までの道のりの地図」。敵の壁は通れないが、壊せば通れるので「遠回り WALL_COST マスぶん」として数える
+function flowTo(civ, tx, tz) {
+  const key = civ.id * 1e5 + tz * G.size + tx;
+  let f = G.flows.get(key);
+  if (!f) {
+    if (G.flows.size > 300) G.flows.clear(); // 覚えすぎたら捨てる
+    f = dijkstra(civ, tx, tz); G.flows.set(key, f);
+  }
+  return f;
+}
+function dijkstra(civ, sx, sz) {
+  const S = G.size, N = S * S, d = new Int32Array(N).fill(INF);
+  const hk = [], hv = []; // 小さい順に取り出せる山（ヒープ）
+  const push = (k, v) => {
+    let i = hk.length; hk.push(k); hv.push(v);
+    while (i > 0) { const p = (i - 1) >> 1; if (hk[p] <= k) break; hk[i] = hk[p]; hv[i] = hv[p]; i = p; }
+    hk[i] = k; hv[i] = v;
+  };
+  const pop = () => {
+    const v = hv[0], lk = hk.pop(), lv = hv.pop(), n = hk.length;
+    if (n) {
+      let i = 0;
+      for (;;) {
+        let c = 2 * i + 1;
+        if (c >= n) break;
+        if (c + 1 < n && hk[c + 1] < hk[c]) c++;
+        if (hk[c] >= lk) break;
+        hk[i] = hk[c]; hv[i] = hv[c]; i = c;
+      }
+      hk[i] = lk; hv[i] = lv;
+    }
+    return v;
+  };
+  const s = sz * S + sx; d[s] = 0; push(0, s);
+  const nb = [0, 0, 0, 0];
+  while (hk.length) {
+    const k = hk[0], i = pop();
+    if (k > d[i]) continue;
+    const x = i % S;
+    nb[0] = x > 0 ? i - 1 : -1; nb[1] = x < S - 1 ? i + 1 : -1; nb[2] = i >= S ? i - S : -1; nb[3] = i < N - S ? i + S : -1;
+    for (const j of nb) {
+      if (j < 0 || !TERRAIN[G.tiles[j]].pass) continue;
+      const w = wallAt(j), nd = k + 1 + (w && w.civ !== civ ? WALL_COST : 0);
+      if (nd < d[j]) { d[j] = nd; push(nd, j); }
+    }
+  }
+  return d;
+}
+function allConnected() {
+  const f = bfs(G.player.cx, G.player.cz);
+  return G.civs.every((c) => !c.alive || f[c.cz * G.size + c.cx] < INF);
+}
+
+function buildTerrainMeshes() {
+  const S = G.size, N = S * S;
+  terrainGroup = new THREE.Group();
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(600, 600).rotateX(-Math.PI / 2), mat(0x2f78b8));
+  ocean.position.y = -0.2; ocean.receiveShadow = true;
+  terrainGroup.add(ocean);
+  tileMesh = new THREE.InstancedMesh(GEO.box, new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.95 }), N);
+  tileMesh.receiveShadow = true;
+  treeMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(0.26, 0.85, 5).translate(0, 0.42, 0), mat(0x3d7a33), N * 3);
+  mtnMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(0.72, 1, 5).translate(0, 0.5, 0), mat(0x857868), N);
+  snowMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(0.72, 1, 5).translate(0, 0.5, 0), mat(0xf4f6f8), N);
+  rockMesh = new THREE.InstancedMesh(GEO.dode, mat(0x8d8d85), N * 2);
+  for (const m of [treeMesh, mtnMesh, snowMesh, rockMesh]) { m.castShadow = true; m.receiveShadow = true; }
+  terrainGroup.add(tileMesh, treeMesh, mtnMesh, snowMesh, rockMesh);
+  scene.add(terrainGroup);
+}
+const _o = new THREE.Object3D();
+function updateTerrain() {
+  const S = G.size;
+  let nt = 0, nm = 0, ns = 0, nr = 0;
+  for (let i = 0; i < S * S; i++) {
+    const x = i % S, z = (i / S) | 0, t = G.tiles[i], h = TERRAIN[t].h;
+    const wx = wOf(x), wz = wOf(z);
+    _o.position.set(wx, (h - 0.5) / 2, wz); _o.rotation.set(0, 0, 0); _o.scale.set(1, h + 0.5, 1); _o.updateMatrix();
+    tileMesh.setMatrixAt(i, _o.matrix);
+    if (t === T.FOREST) {
+      for (let k = 0; k < 3; k++) {
+        const s = 0.75 + hrand(i, k) * 0.55;
+        _o.position.set(wx + (hrand(i, k + 3) - 0.5) * 0.6, h, wz + (hrand(i, k + 6) - 0.5) * 0.6);
+        _o.scale.set(s, s, s); _o.rotation.set(0, hrand(i, k + 9) * 6, 0); _o.updateMatrix();
+        treeMesh.setMatrixAt(nt++, _o.matrix);
+      }
+    } else if (t === T.MOUNTAIN) {
+      const mh = 1.1 + hrand(i, 1) * 1.3, ry = hrand(i, 2) * 6;
+      _o.position.set(wx, h, wz); _o.scale.set(1, mh, 1); _o.rotation.set(0, ry, 0); _o.updateMatrix();
+      mtnMesh.setMatrixAt(nm++, _o.matrix);
+      if (mh > 1.7) {
+        _o.position.set(wx, h + mh * 0.64, wz); _o.scale.set(0.37, mh * 0.365, 0.37); _o.updateMatrix();
+        snowMesh.setMatrixAt(ns++, _o.matrix);
+      }
+    } else if (t === T.ROCK) {
+      for (let k = 0; k < 2; k++) {
+        const s = 0.14 + hrand(i, k) * 0.14;
+        _o.position.set(wx + (hrand(i, k + 3) - 0.5) * 0.55, h + s * 0.5, wz + (hrand(i, k + 5) - 0.5) * 0.55);
+        _o.scale.set(s, s * 0.8, s); _o.rotation.set(hrand(i, 7), hrand(i, 8) * 6, 0); _o.updateMatrix();
+        rockMesh.setMatrixAt(nr++, _o.matrix);
+      }
+    }
+  }
+  treeMesh.count = nt; mtnMesh.count = nm; snowMesh.count = ns; rockMesh.count = nr;
+  for (const m of [tileMesh, treeMesh, mtnMesh, snowMesh, rockMesh]) m.instanceMatrix.needsUpdate = true;
+  updateTileColors();
+}
+const _c = new THREE.Color(), _cc = new THREE.Color();
+function updateTileColors() {
+  const S = G.size;
+  for (let i = 0; i < S * S; i++) {
+    _c.setHex(TERRAIN[G.tiles[i]].color);
+    _c.offsetHSL(0, 0, (hrand(i, 99) - 0.5) * 0.05);
+    const o = G.owner[i];
+    if (o >= 0 && G.tiles[i] !== T.WATER) _c.lerp(_cc.setHex(G.civs[o].color), 0.26);
+    tileMesh.setColorAt(i, _c);
+  }
+  tileMesh.instanceColor.needsUpdate = true;
+}
+function adjCount(tx, tz, types) {
+  let n = 0;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if (!dx && !dz) continue;
+    const x = tx + dx, z = tz + dz;
+    if (x < 0 || z < 0 || x >= G.size || z >= G.size) continue;
+    if (types.includes(G.tiles[z * G.size + x])) n++;
+  }
+  return n;
+}
+function computeTerritory() {
+  const S = G.size;
+  G.owner.fill(-1); G.ownerD.fill(INF);
+  // 領土を広げるのは、できあがった建物だけ（建築中・壁は広げない）
+  for (const b of G.buildings) {
+    if (b.dead || !b.done || BUILD[b.type].noTerr) continue;
+    const r = b.type === 'capital' ? 5 : 3;
+    for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+      const x = b.tx + dx, z = b.tz + dz;
+      if (x < 0 || z < 0 || x >= S || z >= S) continue;
+      let d = Math.hypot(dx, dz);
+      if (d > r + 0.2) continue;
+      if (!dx && !dz) d = -1;
+      const i = z * S + x;
+      if (d < G.ownerD[i]) { G.ownerD[i] = d; G.owner[i] = b.civ.id; }
+    }
+  }
+  // 工場のまわり3マスは1.5倍
+  const factories = G.buildings.filter((f) => f.type === 'factory' && f.done && !f.dead);
+  for (const b of G.buildings) {
+    b.boost = 1;
+    if (b.dead || !b.done) continue;
+    for (const f of factories) {
+      if (f.civ === b.civ && f !== b &&
+        Math.max(Math.abs(f.tx - b.tx), Math.abs(f.tz - b.tz)) <= 3) { b.boost = 1.5; break; }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------
+// 建物
+// ---------------------------------------------------------------------
+function baseHp(b) {
+  return b.type === 'capital' ? 1000 + 300 * b.era : BUILD[b.type].hp * (1 + 0.4 * b.era);
+}
+function shieldMax(era) { return 400 + 150 * era; }
+function canPlace(c, type, tx, tz) {
+  if (tx < 0 || tz < 0 || tx >= G.size || tz >= G.size) return 'マップの外です';
+  const i = tz * G.size + tx, def = BUILD[type];
+  if (def.era && c.era < def.era) return `${ERAS[def.era].name}で使えます`;
+  if (G.tiles[i] !== T.GRASS) return '草原にしか建てられません';
+  if (G.occ[i]) return 'もう建物があります';
+  if (G.owner[i] !== c.id) return '自分の領土（色がついた所）にしか建てられません';
+  if (type === 'lumber' && !adjCount(tx, tz, [T.FOREST])) return '森のとなりに建ててください';
+  if (type === 'quarry' && !adjCount(tx, tz, [T.ROCK, T.MOUNTAIN])) return '岩場か山のとなりに建ててください';
+  return null;
+}
+// done=false なら「建築予定地」になり、兵士が来て建てるまで動かない
+function placeBuilding(c, type, tx, tz, done = false, paid = null) {
+  const b = {
+    isBuilding: true, type, civ: c, era: c.era, tx, tz, x: wOf(tx), z: wOf(tz), hp: 0, maxHp: 0,
+    cd: Math.random(), timer: 0, adj: 0, dead: false, flash: 0, grow: 0, aim: 0, boost: 1,
+    done, progress: done ? 1 : 0, reno: false, renoProg: 0, paid, paused: false, tpcd: 0,
+  };
+  b.maxHp = baseHp(b);
+  b.hp = done ? b.maxHp : b.maxHp * 0.1;
+  G.occ[tz * G.size + tx] = b;
+  G.buildings.push(b);
+  if (type === 'capital') c.capital = b;
+  const big = type === 'capital';
+  b.bar = makeBar(big ? 1.4 : 0.8, b.x, big ? 4.55 : 2.05, b.z, c.isPlayer ? BAR_P : BAR_E);
+  b.wbar = makeBar(0.8, b.x, 2.25, b.z, BAR_W);
+  buildMeshFor(b);
+  if (done) finishBuilding(b, true);
+  else { b.scaf = makeScaffold(); b.scaf.position.set(b.x, 0.35, b.z); scene.add(b.scaf); }
+  return b;
+}
+function finishBuilding(b, silent) {
+  b.done = true; b.progress = 1;
+  if (b.scaf) { scene.remove(b.scaf); b.scaf = null; }
+  if (b.type === 'shield') {
+    b.shieldMax = b.shieldHp = shieldMax(b.era); b.lastHit = -99; b.sflash = 0;
+    b.dome = new THREE.Mesh(GEO.dome, new THREE.MeshStandardMaterial({
+      color: 0x7fe8ff, emissive: 0x3fb8ff, emissiveIntensity: 0.5, transparent: true, opacity: 0.18,
+      depthWrite: false, side: THREE.DoubleSide, flatShading: true }));
+    b.dome.scale.setScalar(SHIELD_R); b.dome.position.set(b.x, 0.35, b.z);
+    scene.add(b.dome);
+  }
+  if (b.type === 'wall') G.flows.clear();
+  calcAdj(b);
+  recalcPop(b.civ);
+  G.dirtyTerritory = true;
+  if (!silent) {
+    b.grow = 0.3;
+    boom(b.x, 0.5, b.z, 0xd8c8a0, 5, 0.5);
+    if (b.civ.isPlayer && b.type !== 'wall') log(`✅ ${BUILD[b.type].icon} ${nameOf(b)}ができた`, 'good');
+  }
+}
+function buildMeshFor(b) {
+  if (b.mesh) scene.remove(b.mesh);
+  const { group, head } = makeBuilding(b.type, b.era, b.civ.color);
+  group.position.set(b.x, 0.35, b.z);
+  b.mesh = group; b.head = head; b.grow = 0;
+  scene.add(group);
+}
+function removeBuildingVisuals(b) {
+  for (const m of [b.mesh, b.dome, b.bar, b.wbar, b.scaf]) if (m) scene.remove(m);
+}
+// 建築・改修の作業。兵士1人ぶんの dt 秒の作業を加える
+function addWork(b, dt) {
+  const def = BUILD[b.type];
+  if (!b.done) {
+    const dp = dt / def.time;
+    b.progress = Math.min(1, b.progress + dp);
+    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.9 * dp);
+    if (b.progress >= 1) finishBuilding(b);
+  } else if (b.reno) {
+    b.renoProg += dt / (def.time * 0.5);
+    if (b.renoProg >= 1) finishReno(b);
+  }
+}
+function canRenovate(b) {
+  return b.done && !b.dead && !b.reno && b.type !== 'capital' && b.era < b.civ.era;
+}
+function startReno(b) {
+  const c = b.civ, cost = renoCost(c, b.type);
+  if (!canRenovate(b) || !canAfford(c, cost)) return false;
+  pay(c, cost);
+  b.reno = true; b.renoProg = 0;
+  return true;
+}
+function finishReno(b) {
+  const r = b.hp / b.maxHp, old = nameOf(b);
+  b.reno = false; b.renoProg = 0;
+  b.era = b.civ.era;
+  b.maxHp = baseHp(b); b.hp = b.maxHp * r;
+  if (b.type === 'shield') { b.shieldMax = shieldMax(b.era); b.shieldHp = b.shieldMax; }
+  buildMeshFor(b);
+  ringFx(b.x, b.z, 0xffd84a, 3);
+  if (b.civ.isPlayer) log(`🔨 ${old}を改修した → ${ERAS[b.era].name}の${nameOf(b)}`, 'good');
+}
+// 建築予定地をやめる（払った資源の半分がもどる）
+function cancelSite(b) {
+  if (b.done || b.dead) return;
+  if (b.paid) for (const k in b.paid) b.civ.res[k] += Math.floor(b.paid[k] / 2);
+  b.dead = true;
+  removeBuildingVisuals(b);
+  G.occ[b.tz * G.size + b.tx] = null;
+  if (G.pick === b) G.pick = null;
+}
+function calcAdj(b) {
+  if (b.type === 'lumber') b.adj = Math.min(5, adjCount(b.tx, b.tz, [T.FOREST]));
+  if (b.type === 'quarry') b.adj = Math.min(5, adjCount(b.tx, b.tz, [T.ROCK, T.MOUNTAIN]));
+}
+function recalcPop(c) {
+  let h = 0;
+  for (const b of G.buildings) if (!b.dead && b.done && b.civ === c && b.type === 'house') h++;
+  // 兵士が多すぎると重くなるので、時代ごとに上限をつける
+  c.popCap = Math.min(3 + h * 4 + c.era, 24 + c.era * 4);
+}
+function countB(c) {
+  const n = {};
+  for (const k in BUILD) n[k] = 0;
+  for (const b of G.buildings) if (!b.dead && b.civ === c) n[b.type]++;
+  return n;
+}
+function sitesOf(c) { return G.buildings.filter((b) => !b.dead && b.civ === c && (!b.done || b.reno)); }
+// 1秒あたりの生産量。新しい時代に建てた建物ほど多い
+function prodOf(b) {
+  if (!b.done) return null;
+  const m = (1 + 0.2 * b.era) * b.civ.growth * b.boost;
+  switch (b.type) {
+    case 'capital': return { food: 1 * m, wood: 1 * m, stone: 0.4 * m, know: 0.3 * m };
+    case 'farm': return { food: 2 * m };
+    case 'lumber': return { wood: 0.8 * b.adj * m };
+    case 'quarry': return { stone: 0.8 * b.adj * m };
+    case 'lab': return { know: 1 * m };
+    case 'market': return { food: 0.6 * m, wood: 0.6 * m, stone: 0.6 * m, know: 0.3 * m };
+  }
+  return null;
+}
+function foodIncome(c) {
+  let f = 0;
+  for (const b of G.buildings) if (!b.dead && b.civ === c) { const p = prodOf(b); if (p && p.food) f += p.food; }
+  return f;
+}
+
+// ---------------------------------------------------------------------
+// 兵士
+// ---------------------------------------------------------------------
+function spawnUnit(c, x, z, kind = 'inf', era = c.era) {
+  const s = unitStats(kind, era);
+  const u = {
+    isBuilding: false, civ: c, kind, era, x, z, hp: s.hp, maxHp: s.hp, atk: s.atk, range: s.range,
+    speed: s.speed * (0.9 + Math.random() * 0.2), cdMax: s.cd, cd: Math.random(),
+    shot: s.shot, splash: s.splash, vsB: s.vsB, arc: s.arc, upkeep: s.upkeep,
+    mode: 'defend', targetCiv: null, targetB: null, target: null, job: null,
+    think: Math.random() * 0.3, face: 0, jx: (Math.random() - 0.5) * 0.5, jz: (Math.random() - 0.5) * 0.5,
+    phase: Math.random() * 6, lunge: 0, flash: 0, dead: false, moving: false, ax: 0, az: 0,
+  };
+  // 首都のまわりの待機場所
+  for (let k = 0; k < 12; k++) {
+    const a = Math.random() * Math.PI * 2, r = 1.6 + Math.random() * 2.2;
+    const ax = c.capital.x + Math.cos(a) * r, az = c.capital.z + Math.sin(a) * r;
+    if (passable(ax, az)) { u.ax = ax; u.az = az; break; }
+    u.ax = c.capital.x; u.az = c.capital.z;
+  }
+  u.mesh = makeUnitMesh(kind, era, c.color);
+  u.mesh.position.set(x, 0.35, z);
+  scene.add(u.mesh);
+  G.units.push(u);
+  return u;
+}
+function passable(x, z) {
+  const tx = tOf(x), tz = tOf(z);
+  if (tx < 0 || tz < 0 || tx >= G.size || tz >= G.size) return false;
+  return TERRAIN[G.tiles[tz * G.size + tx]].pass;
+}
+function passableFor(civ, x, z) {
+  const tx = tOf(x), tz = tOf(z);
+  if (tx < 0 || tz < 0 || tx >= G.size || tz >= G.size) return false;
+  return !blockedFor(civ, tz * G.size + tx);
+}
+function moveDir(u, dx, dz, dt) {
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-4) return;
+  const s = Math.min(len, u.speed * dt);
+  const nx = u.x + dx / len * s, nz = u.z + dz / len * s;
+  const stuck = !passableFor(u.civ, u.x, u.z);
+  if (stuck || passableFor(u.civ, nx, nz)) { u.x = nx; u.z = nz; }
+  else if (passableFor(u.civ, nx, u.z)) u.x = nx;
+  else if (passableFor(u.civ, u.x, nz)) u.z = nz;
+  u.face = Math.atan2(dx, dz); u.moving = true;
+}
+// 道のりの地図 f をたどって (gx,gz) へ向かう。行く手に敵の壁があれば、それを攻撃目標にする
+function steerFlow(u, f, gx, gz, dt) {
+  const S = G.size;
+  const tx = clamp(tOf(u.x), 0, S - 1), tz = clamp(tOf(u.z), 0, S - 1);
+  const cur = f[tz * S + tx];
+  if (cur >= INF || cur === 0) { moveDir(u, gx - u.x, gz - u.z, dt); return; }
+  let best = cur, bx = -1, bz = -1;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    if (!dx && !dz) continue;
+    const x = tx + dx, z = tz + dz;
+    if (x < 0 || z < 0 || x >= S || z >= S) continue;
+    if (dx && dz && (blockedFor(u.civ, tz * S + x) || blockedFor(u.civ, z * S + tx))) continue; // 角をすりぬけない
+    const v = f[z * S + x] - (dx && dz ? 0.1 : 0);
+    if (v < best) { best = v; bx = x; bz = z; }
+  }
+  if (bx < 0) { moveDir(u, gx - u.x, gz - u.z, dt); return; }
+  const w = wallAt(bz * S + bx);
+  if (w && w.civ !== u.civ) { u.target = w; u.think = 1; return; }
+  moveDir(u, wOf(bx) + u.jx - u.x, wOf(bz) + u.jz - u.z, dt);
+}
+function goTo(u, b, dt) { steerFlow(u, flowTo(u.civ, b.tx, b.tz), b.x, b.z, dt); }
+function findEnemyUnit(civ, x, z, r) {
+  const S = G.size, tx = tOf(x), tz = tOf(z), R = Math.ceil(r);
+  let best = null, bd = r * r;
+  for (let dz = -R; dz <= R; dz++) {
+    const zz = tz + dz; if (zz < 0 || zz >= S) continue;
+    for (let dx = -R; dx <= R; dx++) {
+      const xx = tx + dx; if (xx < 0 || xx >= S) continue;
+      for (const u of G.unitGrid[zz * S + xx]) {
+        if (u.civ === civ || u.dead) continue;
+        const d2 = (u.x - x) ** 2 + (u.z - z) ** 2;
+        if (d2 <= bd) { bd = d2; best = u; }
+      }
+    }
+  }
+  return best;
+}
+function nearestBuilding(c, x, z, r) {
+  let best = null, bd = r * r;
+  for (const b of G.buildings) {
+    if (b.dead || b.civ !== c) continue;
+    const d2 = (b.x - x) ** 2 + (b.z - z) ** 2;
+    if (d2 < bd) { bd = d2; best = b; }
+  }
+  return best;
+}
+function pickTarget(u) {
+  const e = findEnemyUnit(u.civ, u.x, u.z, u.mode === 'attack' ? 4.5 : 6);
+  if (e) return e;
+  if (u.mode === 'attack') {
+    // 目標の建物が決まっていれば、途中の建物は無視してまっすぐ向かう
+    if (u.targetB && !u.targetB.dead) return u.targetB;
+    return nearestBuilding(u.targetCiv, u.x, u.z, 5.5);
+  }
+  // 守り：自分の領土に入った敵を探す
+  let best = null, bd = 22 * 22;
+  for (const th of u.civ.threats) {
+    if (th.dead) continue;
+    const d2 = (th.x - u.x) ** 2 + (th.z - u.z) ** 2;
+    if (d2 < bd) { bd = d2; best = th; }
+  }
+  return best;
+}
+// 建築係の仕事。仕事中なら true を返す（その間は戦わない）
+function updateJob(u, dt) {
+  const s = u.job;
+  if (s.dead || (s.done && !s.reno) || u.mode !== 'defend') { u.job = null; return false; }
+  const dx = s.x - u.x, dz = s.z - u.z, d = Math.hypot(dx, dz);
+  if (d <= 0.85) {
+    u.face = Math.atan2(dx, dz);
+    if (u.cd <= 0) { u.cd = 0.5; u.lunge = 0.12; }
+    addWork(s, dt);
+  } else if (d > 2) goTo(u, s, dt);
+  else moveDir(u, dx, dz, dt);
+  return true;
+}
+// 守りの兵士の中から、近い人を建築係にする（1つの建物に最大 MAX_CREW 人）
+function assignWork(c) {
+  const sites = sitesOf(c);
+  if (!sites.length) return;
+  const crew = new Map(sites.map((s) => [s, 0]));
+  const idle = [];
+  for (const u of G.units) {
+    if (u.dead || u.civ !== c) continue;
+    if (u.job) { if (crew.has(u.job)) crew.set(u.job, crew.get(u.job) + 1); else u.job = null; }
+    else if (u.mode === 'defend' && !(u.target && !u.target.dead && !u.target.isBuilding)) idle.push(u);
+  }
+  for (const s of sites) {
+    while (crew.get(s) < MAX_CREW && idle.length) {
+      let bi = 0, bd = INF;
+      idle.forEach((u, k) => { const d = (u.x - s.x) ** 2 + (u.z - s.z) ** 2; if (d < bd) { bd = d; bi = k; } });
+      const u = idle.splice(bi, 1)[0];
+      u.job = s; u.target = null;
+      crew.set(s, crew.get(s) + 1);
+    }
+  }
+}
+// 攻撃の割合に合わせて、兵士を「攻撃」と「守り」に分ける
+function rebalance(c) {
+  if (c.attackTarget && !c.attackTarget.alive) { c.attackTarget = null; c.targetB = null; }
+  if (c.targetB && c.targetB.dead) c.targetB = null;
+  const tgt = c.attackTarget;
+  const mine = G.units.filter((u) => !u.dead && u.civ === c);
+  const want = tgt ? Math.round(mine.length * c.ratio) : 0;
+  const atk = mine.filter((u) => u.mode === 'attack');
+  for (const u of atk) { u.targetCiv = tgt; u.targetB = c.targetB; }
+  if (atk.length < want) {
+    // 建築係は最後に回す
+    const cand = mine.filter((u) => u.mode === 'defend').sort((a, b) => (a.job ? 1 : 0) - (b.job ? 1 : 0));
+    for (let k = 0; k < want - atk.length && k < cand.length; k++) {
+      Object.assign(cand[k], { mode: 'attack', job: null, targetCiv: tgt, targetB: c.targetB, target: null });
+    }
+  } else if (atk.length > want) {
+    // 首都に近い（まだ出発したばかりの）兵士からもどす
+    const cap = c.capital;
+    atk.sort((a, b) => ((a.x - cap.x) ** 2 + (a.z - cap.z) ** 2) - ((b.x - cap.x) ** 2 + (b.z - cap.z) ** 2));
+    for (let k = 0; k < atk.length - want; k++) {
+      Object.assign(atk[k], { mode: 'defend', targetCiv: null, targetB: null, target: null });
+    }
+  }
+}
+// テレポーターがあれば、目標に近いほうへワープする
+function tryTeleport(u) {
+  const dest = u.targetB && !u.targetB.dead ? u.targetB : u.targetCiv.capital;
+  const du = Math.hypot(dest.x - u.x, dest.z - u.z);
+  let best = null, bd = du - 6;
+  for (const b of G.buildings) {
+    if (b.dead || !b.done || b.civ !== u.civ || b.type !== 'teleporter' || b.tpcd > 0) continue;
+    const d = Math.hypot(dest.x - b.x, dest.z - b.z);
+    if (d < bd) { bd = d; best = b; }
+  }
+  if (!best) return;
+  boom(u.x, 0.5, u.z, 0x4ff0ff, 4, 0.5);
+  u.x = best.x + (Math.random() - 0.5) * 0.8; u.z = best.z + 0.7;
+  best.tpcd = 0.6;
+  boom(u.x, 0.5, u.z, 0x4ff0ff, 4, 0.5);
+}
+function updateUnit(u, dt) {
+  u.cd -= dt; u.think -= dt; u.moving = false;
+  if (u.mode === 'attack' && (!u.targetCiv || !u.targetCiv.alive)) { u.mode = 'defend'; u.targetCiv = null; u.targetB = null; }
+  if (u.targetB && u.targetB.dead) u.targetB = null;
+  if (u.job && updateJob(u, dt)) return;
+  if (u.think <= 0) {
+    u.think = 0.3 + Math.random() * 0.2;
+    u.target = pickTarget(u);
+    if (u.mode === 'attack' && !u.target) tryTeleport(u);
+  }
+  const t = u.target;
+  if (t && !t.dead) {
+    const dx = t.x - u.x, dz = t.z - u.z, d = Math.hypot(dx, dz);
+    const reach = u.range + (t.isBuilding ? (t.type === 'capital' ? 1.0 : 0.55) : 0.25);
+    if (d <= reach) {
+      u.face = Math.atan2(dx, dz);
+      if (u.cd <= 0) unitAttack(u, t);
+      return;
+    }
+    if (t.isBuilding && d > 3) goTo(u, t, dt);
+    else moveDir(u, dx, dz, dt);
+    return;
+  }
+  u.target = null;
+  if (u.mode === 'attack') { goTo(u, u.targetCiv.capital, dt); return; }
+  const d = Math.hypot(u.ax - u.x, u.az - u.z);
+  if (d > 5) goTo(u, u.civ.capital, dt);
+  else if (d > 0.3) moveDir(u, u.ax - u.x, u.az - u.z, dt);
+}
+function unitAttack(u, t) {
+  u.cd = u.cdMax; u.lunge = 0.18;
+  const dmg = u.atk * (t.isBuilding ? u.vsB : 1);
+  if (u.range > 2) {
+    const y = u.kind === 'tank' ? 0.62 : u.kind === 'cannon' ? 0.5 : 0.62;
+    spawnProjectile(u.civ, u.x, y, u.z, t, dmg, u.splash, u.shot, u.splash ? 11 : 20, u.arc);
+  } else dealDamage(t, dmg, u.civ);
+}
+
+// ---------------------------------------------------------------------
+// 弾・ダメージ
+// ---------------------------------------------------------------------
+function spawnProjectile(civ, x, y, z, target, dmg, splash, color, speed, arc) {
+  const glow = color === 0x4ff0ff || color === 0xffd84a;
+  const m = new THREE.Mesh(GEO.ball, mat(color, glow ? { e: 1 } : undefined));
+  m.scale.setScalar(splash > 0 ? 0.13 : glow ? 0.06 : 0.08);
+  m.position.set(x, y, z);
+  scene.add(m);
+  G.projectiles.push({ m, civ, x, y0: y, z, target, tx: target.x, tz: target.z, dmg, splash, speed, arc,
+    total: Math.max(0.5, Math.hypot(target.x - x, target.z - z)), dead: false });
+}
+function updateProjectile(p, dt) {
+  if (!p.target.dead) { p.tx = p.target.x; p.tz = p.target.z; }
+  const dx = p.tx - p.x, dz = p.tz - p.z, d = Math.hypot(dx, dz), step = p.speed * dt;
+  if (d <= step) {
+    p.dead = true; scene.remove(p.m);
+    if (p.splash > 0) {
+      boom(p.tx, 0.5, p.tz, 0xffa040, 6, 0.6);
+      const S = G.size, R = Math.ceil(p.splash), tx = tOf(p.tx), tz = tOf(p.tz), hits = [];
+      for (let zz = tz - R; zz <= tz + R; zz++) for (let xx = tx - R; xx <= tx + R; xx++) {
+        if (xx < 0 || zz < 0 || xx >= S || zz >= S) continue;
+        for (const u of G.unitGrid[zz * S + xx])
+          if (!u.dead && u.civ !== p.civ && (u.x - p.tx) ** 2 + (u.z - p.tz) ** 2 <= p.splash ** 2) hits.push(u);
+      }
+      for (const u of hits) dealDamage(u, p.dmg, p.civ);
+      if (p.target.isBuilding && !p.target.dead) dealDamage(p.target, p.dmg, p.civ);
+    } else if (!p.target.dead) dealDamage(p.target, p.dmg, p.civ);
+    return;
+  }
+  p.x += dx / d * step; p.z += dz / d * step;
+  const prog = clamp(1 - (d - step) / p.total, 0, 1);
+  p.m.position.set(p.x, p.y0 + (0.55 - p.y0) * prog + p.arc * Math.sin(Math.PI * prog), p.z);
+}
+function findShield(c, x, z) {
+  for (const b of G.buildings) {
+    if (b.dead || !b.done || b.civ !== c || b.type !== 'shield' || b.shieldHp <= 0) continue;
+    if ((b.x - x) ** 2 + (b.z - z) ** 2 <= SHIELD_R * SHIELD_R) return b;
+  }
+  return null;
+}
+function dealDamage(t, dmg, src) {
+  if (t.dead) return;
+  const sh = findShield(t.civ, t.x, t.z);
+  if (sh) {
+    sh.shieldHp = Math.max(0, sh.shieldHp - dmg); sh.lastHit = G.time; sh.sflash = 0.25;
+    if (sh.shieldHp <= 0) { boom(sh.x, 1.2, sh.z, 0x7fe8ff, 10, 1); if (sh.civ.isPlayer) log('🛡 シールドが割れた！', 'warn'); }
+    return;
+  }
+  t.hp -= dmg; t.flash = 0.12;
+  if (t.hp <= 0) kill(t, src);
+}
+function kill(t, src) {
+  if (t.dead) return;
+  t.dead = true;
+  scene.remove(t.mesh);
+  if (t.isBuilding) {
+    removeBuildingVisuals(t);
+    G.occ[t.tz * G.size + t.tx] = null;
+    boom(t.x, 0.6, t.z, t.civ.color, t.type === 'capital' ? 30 : 12, t.type === 'capital' ? 2 : 1);
+    G.dirtyTerritory = true;
+    if (t.type === 'wall') G.flows.clear();
+    if (G.pick === t) G.pick = null;
+    recalcPop(t.civ);
+    for (const o of G.civs) {
+      if (o.targetB !== t) continue;
+      o.targetB = null;
+      if (o.isPlayer && t.type !== 'capital') log(`🎯 目標の${nameOf(t)}を壊した！ つぎは${t.civ.name}の首都へ向かう`, 'good');
+    }
+    if (t.type === 'capital') destroyCiv(t.civ, src);
+  } else {
+    boom(t.x, 0.4, t.z, t.civ.color, 5, 0.6);
+    if (src) src.kills++;
+  }
+}
+function destroyCiv(c, by) {
+  if (!c.alive) return;
+  c.alive = false;
+  for (const b of G.buildings) if (b.civ === c && !b.dead) kill(b, by);
+  for (const u of G.units) if (u.civ === c && !u.dead) kill(u, null);
+  for (const o of G.civs) if (o.attackTarget === c) { o.attackTarget = null; o.targetB = null; }
+  if (c.isPlayer) { gameOver(); return; }
+  if (by === G.player) { G.civKills++; showBanner(`${c.name}をほろぼした！`, '領土を広げよう'); }
+  log(`💀 ${c.name}がほろびた${by ? `（${by.name}による）` : ''}`, by === G.player ? 'good' : '');
+  if (!G.unified && G.civs.every((o) => o.isPlayer || !o.alive)) {
+    G.unified = true;
+    showBanner('世界を統一した！', '時代を進めて、記録をのばそう');
+  }
+}
+
+// ---------------------------------------------------------------------
+// 時代を進める
+// ---------------------------------------------------------------------
+function advanceEra(c) {
+  const next = ERAS[c.era + 1];
+  if (!next) return;
+  pay(c, next.cost);
+  c.era++;
+  // 変わるのは首都だけ。ほかの建物と兵士は古いまま（改修・新しく作ると新しくなる）
+  const cap = c.capital, r = cap.hp / cap.maxHp;
+  cap.era = c.era; cap.maxHp = baseHp(cap); cap.hp = cap.maxHp * r;
+  buildMeshFor(cap);
+  recalcPop(c);
+  if (c.isPlayer) {
+    G.maxEra = Math.max(G.maxEra, c.era);
+    showBanner(`${ERAS[c.era].name}に入った！`, next.unlock);
+    ringFx(c.capital.x, c.capital.z, 0xffd84a);
+    shake = 0.5;
+    log(`✨ ${ERAS[c.era].name}へ！ ${next.unlock}`, 'era');
+    buildHudLists();
+  } else {
+    log(`📜 ${c.name}が${ERAS[c.era].name}に入った`);
+  }
+}
+
+// ---------------------------------------------------------------------
+// 敵の文明（AI）
+// ---------------------------------------------------------------------
+function findSpot(c, type) {
+  const S = G.size, cap = c.capital;
+  let enemy = null, ed = INF;
+  for (const o of G.civs) {
+    if (o === c || !o.alive) continue;
+    const d = Math.hypot(o.cx - c.cx, o.cz - c.cz);
+    if (d < ed) { ed = d; enemy = o; }
+  }
+  const ex = enemy ? (enemy.cx - c.cx) / ed : 0, ez = enemy ? (enemy.cz - c.cz) / ed : 0;
+  let best = null, bs = -INF;
+  for (let i = 0; i < S * S; i++) {
+    if (G.owner[i] !== c.id || G.tiles[i] !== T.GRASS || G.occ[i]) continue;
+    const tx = i % S, tz = (i / S) | 0;
+    if (canPlace(c, type, tx, tz)) continue;
+    const dx = tx - cap.tx, dz = tz - cap.tz, d = Math.hypot(dx, dz);
+    if (d < 1.5) continue;
+    let sc = Math.random() * 3;
+    if (type === 'turret' || type === 'teleporter') sc += d * 0.8 + ((dx * ex + dz * ez) / d) * 4;
+    else if (type === 'shield') sc -= Math.abs(d - 2.5) * 2;
+    else if (type === 'lumber') sc += adjCount(tx, tz, [T.FOREST]) * 2 - d * 0.2;
+    else if (type === 'quarry') sc += adjCount(tx, tz, [T.ROCK, T.MOUNTAIN]) * 2 - d * 0.2;
+    else sc -= d * 0.35;
+    if (sc > bs) { bs = sc; best = { tx, tz }; }
+  }
+  return best;
+}
+// いちばん古い、大事な建物を改修する
+function aiRenovate(c) {
+  const order = ['turret', 'barracks', 'range', 'stable', 'foundry', 'farm', 'lab', 'shield'];
+  let best = null;
+  for (const b of G.buildings) {
+    if (b.civ !== c || !canRenovate(b) || !order.includes(b.type)) continue;
+    if (!best || b.era < best.era || (b.era === best.era && order.indexOf(b.type) < order.indexOf(best.type))) best = b;
+  }
+  return !!best && startReno(best);
+}
+function aiThink(c) {
+  const next = ERAS[c.era + 1];
+  if (next && canAfford(c, next.cost)) { advanceEra(c); return; }
+  // 建築予定地（改修中も含む）が多すぎると守りが空になるので、同時に2つまで
+  if (sitesOf(c).length >= 2) return;
+  if (Math.random() < 0.25 && aiRenovate(c)) return;
+  const n = countB(c), p = c.pers, E = c.era, opts = [];
+  if (foodIncome(c) - c.upkeep < 1) opts.push(['farm', 8]);
+  if (c.popCap - c.unitCount <= 1) opts.push(['house', 5]);
+  if (n.farm < 2 + E * 1.5) opts.push(['farm', 4]);
+  if (n.lumber < 2 + E) opts.push(['lumber', 4]);
+  if (n.quarry < 1 + E) opts.push(['quarry', 3]);
+  if (n.lab < (1 + E) * p.lab) opts.push(['lab', 3 * p.lab]);
+  if (n.barracks < 1 + Math.floor(E / 2) + p.barracks) opts.push(['barracks', 3]);
+  if (n.turret < (1 + E * 0.8) * p.turret) opts.push(['turret', 2.5 * p.turret]);
+  if (E >= 1 && n.range < 1 + (p.barracks > 1 ? 1 : 0)) opts.push(['range', 2.5]);
+  if (E >= 2 && n.stable < 1) opts.push(['stable', 2.5]);
+  if (E >= 2 && n.market < E - 1) opts.push(['market', 2]);
+  if (E >= 3 && n.shield < 1) opts.push(['shield', 3]);
+  if (E >= 3 && n.foundry < 1) opts.push(['foundry', 2]);
+  if (E >= 4 && n.tankf < 1) opts.push(['tankf', 2]);
+  if (E >= 4 && n.factory < 1) opts.push(['factory', 2]);
+  if (E >= 5 && n.robotf < 1) opts.push(['robotf', 2]);
+  if (E >= 5 && n.teleporter < (p.barracks ? 1 : 0)) opts.push(['teleporter', 1.5]);
+  if (n.house < 1 + E) opts.push(['house', 1.5]);
+  while (opts.length) {
+    let sum = 0; for (const o of opts) sum += o[1];
+    let r = Math.random() * sum, idx = 0;
+    while (r > opts[idx][1]) { r -= opts[idx][1]; idx++; }
+    const [key] = opts.splice(idx, 1)[0];
+    const cost = costOf(c, key);
+    if (!canAfford(c, cost)) continue;
+    const spot = findSpot(c, key);
+    if (!spot) continue;
+    pay(c, cost);
+    placeBuilding(c, key, spot.tx, spot.tz, false, cost);
+    return;
+  }
+}
+function aiWave(c) {
+  const home = G.units.filter((u) => !u.dead && u.civ === c && u.mode === 'defend' && !u.job);
+  if (home.length < 3) return;
+  const cands = G.civs.filter((o) => o !== c && o.alive);
+  if (!cands.length) return;
+  const w = cands.map((o) => (o.isPlayer ? 1.7 : 1) / Math.hypot(o.cx - c.cx, o.cz - c.cz));
+  let r = Math.random() * w.reduce((a, b) => a + b, 0), k = 0;
+  while (r > w[k]) { r -= w[k]; k++; }
+  const target = cands[k];
+  // 1回の攻撃の人数は、時間と時代でだんだん増える
+  const n = Math.min(Math.ceil(home.length * 0.7), 3 + c.era * 2 + Math.floor(G.time / 90) * 2);
+  for (let i = 0; i < n; i++) { home[i].mode = 'attack'; home[i].targetCiv = target; home[i].target = null; }
+  if (target.isPlayer) {
+    log(`⚔ ${c.name}の軍（${n}人）が攻めてきた！`, 'warn');
+    flashAlert();
+  } else {
+    log(`⚔ ${c.name}が${target.name}に攻めこんだ（${n}人）`);
+  }
+}
+
+// =====================================================================
+// 1コマの更新
+// =====================================================================
+function update(dt) {
+  G.time += dt;
+  const S = G.size;
+  // 兵士をマスごとに登録（近くの敵さがしを速くするため）
+  for (const arr of G.unitGrid) arr.length = 0;
+  for (const c of G.civs) { c.unitCount = 0; c.upkeep = 0; c.threats.length = 0; }
+  for (const u of G.units) {
+    if (u.dead) continue;
+    const tx = clamp(tOf(u.x), 0, S - 1), tz = clamp(tOf(u.z), 0, S - 1), i = tz * S + tx;
+    const cell = G.unitGrid[i];
+    for (const o of cell) { // 同じマスの味方と少しはなれる
+      if (o.civ !== u.civ) continue;
+      const dx = u.x - o.x, dz = u.z - o.z, d = Math.hypot(dx, dz);
+      if (d < 0.3 && d > 1e-4) { const k = (0.3 - d) * 0.5 / d; u.x += dx * k; u.z += dz * k; }
+    }
+    cell.push(u);
+    u.civ.unitCount++;
+    u.civ.upkeep += u.upkeep;
+    const o = G.owner[i];
+    if (o >= 0 && o !== u.civ.id) G.civs[o].threats.push(u);
+  }
+  for (const b of G.buildings) if (!b.dead) updateBuilding(b, dt);
+  for (const c of G.civs) {
+    if (!c.alive) continue;
+    feed(c, dt);
+    c.workT -= dt;
+    if (c.workT <= 0) { c.workT = 0.5; assignWork(c); }
+    if (c.isPlayer) {
+      c.balT -= dt;
+      if (c.balT <= 0) { c.balT = 0.5; rebalance(c); }
+      continue;
+    }
+    c.thinkTimer -= dt;
+    if (c.thinkTimer <= 0) { c.thinkTimer = 4 / c.growth; aiThink(c); }
+    c.waveTimer -= dt;
+    if (c.waveTimer <= 0) { c.waveTimer = c.pers.wave * (0.8 + Math.random() * 0.4); aiWave(c); }
+  }
+  for (const u of G.units) if (!u.dead) updateUnit(u, dt);
+  for (const p of G.projectiles) if (!p.dead) updateProjectile(p, dt);
+  G.units = G.units.filter((u) => !u.dead);
+  G.buildings = G.buildings.filter((b) => !b.dead);
+  G.projectiles = G.projectiles.filter((p) => !p.dead);
+  if (G.dirtyTerritory) { G.dirtyTerritory = false; computeTerritory(); updateTileColors(); }
+  G.alertCd -= dt;
+  if (G.phase === 'play' && G.player.threats.length && G.alertCd <= 0) {
+    G.alertCd = 10;
+    log('⚠ 敵が領土に入った！', 'warn');
+    flashAlert();
+  }
+}
+// 兵士は毎秒食料を食べる。食料が0のあいだは、STARVE_EVERY 秒ごとに1人去る
+function feed(c, dt) {
+  c.res.food -= c.upkeep * dt;
+  if (c.res.food > 0) { c.starve = 0; return; }
+  c.res.food = 0;
+  c.starve += dt;
+  if (c.starve < STARVE_EVERY) return;
+  c.starve = 0;
+  const mine = G.units.filter((u) => !u.dead && u.civ === c);
+  if (!mine.length) return;
+  const u = mine[(Math.random() * mine.length) | 0];
+  kill(u, null);
+  if (c.isPlayer) log('🍖 食料が足りず、兵士が1人去った…', 'warn');
+}
+function turretFire(b, dt, mult) {
+  b.cd -= dt;
+  if (b.cd > 0) return;
+  const tr = ERAS[b.era].turret;
+  const range = tr.range * (b.type === 'capital' ? 0.9 : 1);
+  const e = findEnemyUnit(b.civ, b.x, b.z, range);
+  if (!e) { b.cd = 0.2; return; }
+  b.aim = Math.atan2(e.x - b.x, e.z - b.z);
+  b.cd = tr.cd;
+  const y = b.type === 'capital' ? 2.0 : b.head ? 0.35 + b.head.position.y + 0.2 : 1;
+  spawnProjectile(b.civ, b.x, y, b.z, e, tr.dmg * mult, tr.splash, tr.shot, tr.speed, tr.arc);
+}
+// 兵を作る建物：1人ずつ、費用と時間をかけて作る
+function train(b, dt) {
+  const c = b.civ, s = unitStats(BUILD[b.type].trains, b.era);
+  if (b.paused) return;
+  // AI は兵士を決めた人数までにして、残りの資源を時代を進めるために貯める
+  if (!c.isPlayer && c.unitCount >= 6 + c.era * 4 + c.pers.barracks * 3) return;
+  b.timer += dt * b.boost;
+  if (b.timer < s.time) return;
+  b.timer = s.time;
+  if (c.unitCount >= c.popCap || !canAfford(c, s.cost)) return;
+  pay(c, s.cost);
+  c.unitCount++; b.timer = 0;
+  spawnUnit(c, b.x + (Math.random() - 0.5) * 0.4, b.z + 0.6, BUILD[b.type].trains, b.era);
+}
+function updateBuilding(b, dt) {
+  const c = b.civ, R = c.res;
+  if (!b.done) return;
+  const p = prodOf(b);
+  if (p) for (const k in p) R[k] += p[k] * dt;
+  if (BUILD[b.type].trains) train(b, dt);
+  switch (b.type) {
+    case 'capital':
+      turretFire(b, dt, 1);
+      // 兵士が0人になったら、首都から見習いが1人出てくる（建築できなくなるのを防ぐ）
+      if (c.unitCount === 0) {
+        c.freeT += dt;
+        if (c.freeT >= 15) { c.freeT = 0; c.unitCount++; spawnUnit(c, b.x, b.z + 1.2, 'inf', b.era); }
+      } else c.freeT = 0;
+      break;
+    case 'turret': turretFire(b, dt, 1); break;
+    case 'teleporter': b.tpcd -= dt; break;
+    case 'shield': {
+      const wait = b.shieldHp <= 0 ? 6 : 3;
+      if (G.time - b.lastHit > wait) b.shieldHp = Math.min(b.shieldMax, b.shieldHp + (10 + b.era * 5) * dt);
+      break;
+    }
+  }
+}
+
+// =====================================================================
+// 演出
+// =====================================================================
+let shake = 0;
+function boom(x, y, z, color, n, power = 1) {
+  for (let k = 0; k < n; k++) {
+    const m = new THREE.Mesh(GEO.box, mat(k % 3 === 0 ? 0x555555 : k % 3 === 1 ? 0xffa040 : color));
+    m.scale.setScalar((0.06 + Math.random() * 0.1) * power);
+    m.position.set(x, y, z);
+    scene.add(m);
+    G.fx.push({ m, kind: 'p', vx: (Math.random() - 0.5) * 4 * power, vy: 2 + Math.random() * 3 * power,
+      vz: (Math.random() - 0.5) * 4 * power, life: 0.6 + Math.random() * 0.4, max: 1 });
+  }
+}
+function ringFx(x, z, color, size = 28) {
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 64).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+  m.position.set(x, 0.5, z);
+  scene.add(m);
+  G.fx.push({ m, kind: 'ring', life: 1.6, max: 1.6, size });
+}
+function updateFx(dt) {
+  for (const f of G.fx) {
+    f.life -= dt;
+    if (f.kind === 'p') {
+      f.vy -= 9 * dt;
+      f.m.position.x += f.vx * dt; f.m.position.y += f.vy * dt; f.m.position.z += f.vz * dt;
+      f.m.rotation.x += dt * 5; f.m.rotation.y += dt * 4;
+      if (f.m.position.y < 0.36) { f.m.position.y = 0.36; f.vy *= -0.3; f.vx *= 0.6; f.vz *= 0.6; }
+    } else {
+      const k = 1 - f.life / f.max;
+      f.m.scale.setScalar(1 + k * f.size);
+      f.m.material.opacity = 0.9 * (1 - k);
+    }
+    if (f.life <= 0) { scene.remove(f.m); if (f.kind === 'ring') { f.m.geometry.dispose(); f.m.material.dispose(); } }
+  }
+  G.fx = G.fx.filter((f) => f.life > 0);
+}
+const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2; };
+function syncVisuals(rdt) {
+  const now = performance.now() / 1000;
+  for (const u of G.units) {
+    u.lunge = Math.max(0, u.lunge - rdt);
+    u.flash = Math.max(0, u.flash - rdt);
+    const hop = u.moving ? Math.abs(Math.sin(now * 12 + u.phase)) * 0.07 : 0;
+    const l = u.lunge * 0.8;
+    u.mesh.position.set(u.x + Math.sin(u.face) * l, 0.35 + hop, u.z + Math.cos(u.face) * l);
+    u.mesh.rotation.y = u.face;
+    u.mesh.scale.setScalar(u.flash > 0 ? 1.25 : 1);
+  }
+  for (const b of G.buildings) {
+    b.grow = Math.min(1, b.grow + rdt * 2.5);
+    b.flash = Math.max(0, b.flash - rdt);
+    const s = easeOutBack(b.grow) * (b.flash > 0 ? 1.07 : 1);
+    // 建築中は、進み具合に合わせて下から背がのびていく
+    b.mesh.scale.set(s, b.done ? s : s * (0.08 + 0.92 * b.progress), s);
+    if (b.head) b.head.rotation.y += (((b.aim - b.head.rotation.y + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * Math.min(1, rdt * 10);
+    setBar(b.bar, b.done && b.hp < b.maxHp - 0.5, b.hp / b.maxHp);
+    setBar(b.wbar, !b.done || b.reno, b.done ? b.renoProg : b.progress);
+    b.mesh.traverse((o) => {
+      if (o.userData.float) o.position.y = (o.userData.baseY ??= o.position.y) + Math.sin(now * 2) * 0.06;
+      if (o.userData.spin) o.rotation.y += rdt;
+    });
+    if (b.dome) {
+      b.sflash = Math.max(0, b.sflash - rdt);
+      const r = b.shieldHp / b.shieldMax;
+      b.dome.visible = b.shieldHp > 0;
+      b.dome.material.opacity = 0.06 + 0.14 * r + b.sflash * 1.2;
+    }
+  }
+  // 攻撃目標の印（赤い矢印）と、えらんだ自分の建物の印
+  const P = G.player, dest = P.attackTarget && P.attackTarget.alive ? (P.targetB || P.attackTarget.capital) : null;
+  targetMarker.visible = !!dest && P.ratio > 0;
+  if (targetMarker.visible) {
+    const h = dest.type === 'capital' ? 5.3 : 2.9;
+    targetMarker.position.set(dest.x, h + Math.sin(now * 4) * 0.15, dest.z);
+    targetMarker.rotation.y += rdt * 2;
+  }
+  pickRing.visible = !!G.pick && !G.pick.dead;
+  if (pickRing.visible) pickRing.position.set(G.pick.x, 0.42, G.pick.z);
+  updateFx(rdt);
+}
+
+// =====================================================================
+// 画面（HUD）
+// =====================================================================
+function log(text, cls = '') {
+  const box = $('log');
+  const d = document.createElement('div');
+  d.className = cls; d.textContent = text;
+  box.appendChild(d);
+  while (box.children.length > 7) box.firstChild.remove();
+  setTimeout(() => { d.style.opacity = '0'; }, 9000);
+  setTimeout(() => d.remove(), 10000);
+}
+function showBanner(t, s) {
+  const b = $('banner');
+  b.querySelector('.t').textContent = t;
+  b.querySelector('.s').textContent = s || '';
+  b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+}
+function flashAlert() {
+  const a = $('alert');
+  a.classList.remove('on'); void a.offsetWidth; a.classList.add('on');
+}
+const BUILD_KEYS = Object.keys(BUILD).filter((k) => !BUILD[k].hidden);
+function buildHudLists() {
+  const P = G.player;
+  const mk = (box, defs, kind) => {
+    box.innerHTML = '';
+    Object.entries(defs).forEach(([key, def], idx) => {
+      if (def.hidden) return;
+      const b = document.createElement('button');
+      b.className = 'bbtn'; b.dataset.key = key; b.dataset.kind = kind;
+      b.title = def.desc;
+      const nm = key === 'turret' ? ERAS[P.era].turret.name : def.name;
+      const hot = kind === 'build' && idx < 9 ? `<span class="key">${idx + 1}</span>` : '';
+      b.innerHTML = `<span class="nm">${def.icon} ${nm}${hot}</span><span class="cs"></span>`;
+      b.onclick = () => select(kind, key);
+      box.appendChild(b);
+    });
+  };
+  mk($('build-list'), BUILD, 'build');
+  mk($('tool-list'), TOOLS, 'tool');
+  refreshHud();
+}
+function buildCivRows() {
+  const box = $('civ-list');
+  box.innerHTML = '';
+  for (const c of G.civs) {
+    const row = document.createElement('div');
+    row.className = 'civ';
+    row.innerHTML = `<div class="ch"><span class="dot" style="background:${c.css}"></span><b>${c.name}</b><span class="ce"></span></div>
+      <div class="hpb"><i></i></div>
+      <div class="cf"><span class="cu"></span>${c.isPlayer ? '' : '<button class="atk" title="この国の首都を攻撃目標にする">🎯 狙う</button>'}</div>`;
+    if (!c.isPlayer) row.querySelector('.atk').onclick = () => orderAttack(c, null);
+    c.row = row;
+    box.appendChild(row);
+  }
+}
+function fmtYear() {
+  const y = Math.floor(-4000 + G.time * 10);
+  return y <= 0 ? `紀元前${-y + 1}年` : `西暦${y}年`;
+}
+function hasOld(c) { return G.buildings.some((b) => b.civ === c && canRenovate(b) && b.type !== 'wall'); }
+function currentHint() {
+  const P = G.player, n = countB(P);
+  if (!n.farm) return '🌾 まずは農場を建てよう。建物は、守りの兵士が歩いていって建てます';
+  if (!n.lumber) return '🪓 森のとなりに木こり小屋を建てよう';
+  if (!n.barracks) return '⚔ 兵舎を建てると、食料を使って兵士を1人ずつ作ります';
+  if (sitesOf(P).length && !G.units.some((u) => u.civ === P && u.job)) return '🔨 建てる兵士がいません。攻撃の割合を下げると、守りの兵士が建てに行きます';
+  if (foodIncome(P) - P.upkeep < 0) return '🍖 食料がへっています。農場をふやすか、兵をつくる建物を「停止」しよう';
+  if (!n.lab) return '🔭 研究所を建てて知識をためよう';
+  if (!n.quarry) return '⛏ 岩場のとなりに石切り場を建てよう';
+  if (!n.turret) return '🗼 タレットは高いので、敵が来る道にしぼって置こう';
+  if (P.era < 5 && canAfford(P, ERAS[P.era + 1].cost)) return '✨ 時代を進められます！';
+  if (P.unitCount >= P.popCap) return '🏠 兵士がいっぱい。家を建てて上限をふやそう';
+  if (hasOld(P)) return '🔨 古い建物をクリックして「改修」すると、今の時代の強さになります';
+  if (P.era >= 1 && !n.wall) return '🧱 壁で敵の通り道をふさごう。回り道が長いと、敵は壁を壊しにくる';
+  if (P.ratio === 0) return '⚔ 攻撃の割合を上げてから、敵の建物をクリックすると、そこを狙います';
+  if (P.era >= 3 && !n.shield) return '🛡 シールドで首都を守ろう';
+  if (P.era >= 4) return '⛰ 山を作って、敵の通り道をしぼろう';
+  return '📘 資源をためて、次の時代をめざそう';
+}
+function refreshHud() {
+  const P = G.player, R = P.res;
+  $('r-food').textContent = Math.floor(R.food);
+  const net = foodIncome(P) - P.upkeep;
+  const rate = $('r-food-rate');
+  rate.textContent = `(${net >= 0 ? '+' : ''}${net.toFixed(1)})`;
+  rate.style.color = net >= 0 ? 'var(--good)' : 'var(--bad)';
+  $('r-wood').textContent = Math.floor(R.wood);
+  $('r-stone').textContent = Math.floor(R.stone);
+  $('r-know').textContent = Math.floor(R.know);
+  $('r-pop').textContent = `${P.unitCount}/${P.popCap}`;
+  const mine = G.units.filter((u) => u.civ === P && !u.dead);
+  const nAtk = mine.filter((u) => u.mode === 'attack').length, nJob = mine.filter((u) => u.job).length;
+  $('r-work').textContent = nJob;
+  $('t-era').textContent = ERAS[P.era].name;
+  $('t-year').textContent = fmtYear();
+  $('era-cur').textContent = `🏛 ${ERAS[P.era].name}`;
+  const next = ERAS[P.era + 1];
+  const eb = $('btn-era');
+  if (next) {
+    eb.textContent = `時代を進める → ${next.name}`;
+    eb.disabled = !canAfford(P, next.cost);
+    eb.style.opacity = eb.disabled ? 0.5 : 1;
+    $('era-cost').innerHTML = Object.entries(next.cost).map(([k, v]) =>
+      `${RES_ICON[k]} <span style="color:${R[k] >= v ? 'var(--good)' : 'var(--text)'}">${Math.floor(Math.min(R[k], v))}/${v}</span>`).join('　');
+  } else {
+    eb.textContent = '最高の時代に到達！'; eb.disabled = true;
+    $('era-cost').textContent = 'あとはどこまで生きのびられるか';
+  }
+  $('hint').textContent = currentHint();
+  for (const btn of document.querySelectorAll('.bbtn')) {
+    const key = btn.dataset.key, def = BUILD[key] || TOOLS[key];
+    const locked = def.era && P.era < def.era;
+    const cost = costOf(P, key);
+    btn.classList.toggle('locked', !!locked);
+    btn.classList.toggle('lack', !locked && !canAfford(P, cost));
+    btn.classList.toggle('on', !!G.sel && G.sel.key === key);
+    btn.querySelector('.cs').innerHTML = locked ? `🔒 ${ERAS[def.era].name}` : costText(P, cost);
+  }
+  for (const c of G.civs) {
+    if (!c.row) continue;
+    c.row.classList.toggle('dead', !c.alive);
+    c.row.querySelector('.ce').textContent = c.alive ? ERAS[c.era].name : 'ほろびた';
+    const cap = c.capital;
+    const r = c.alive && cap ? clamp(cap.hp / cap.maxHp, 0, 1) : 0;
+    const bar = c.row.querySelector('.hpb i');
+    bar.style.width = `${r * 100}%`;
+    bar.style.background = r > 0.5 ? 'var(--good)' : r > 0.25 ? 'var(--accent)' : 'var(--bad)';
+    c.row.querySelector('.cu').textContent = `首都 ${Math.ceil(c.alive ? cap.hp : 0)} ・ 兵士 ${c.unitCount}`;
+    const atk = c.row.querySelector('.atk');
+    if (atk) { atk.disabled = !c.alive; atk.classList.toggle('on', P.attackTarget === c); }
+  }
+  const pct = Math.round(P.ratio * 100);
+  if (document.activeElement !== $('cmd-ratio')) $('cmd-ratio').value = pct;
+  $('cmd-ratio-v').textContent = `攻撃 ${pct}% ・ 守り ${100 - pct}%`;
+  const tgt = P.attackTarget;
+  $('cmd-target').textContent = tgt
+    ? `🎯 目標：${tgt.name}の${P.targetB ? nameOf(P.targetB) : '首都'}`
+    : '🎯 目標：なし（右の「狙う」か、敵の建物をクリック）';
+  $('cmd-def').classList.toggle('on', P.ratio === 0);
+  $('cmd-state').textContent = `⚔ 攻撃中 ${nAtk}人 ／ 🛡 守り ${mine.length - nAtk - nJob}人 ／ 🔨 建築 ${nJob}人`;
+}
+// 攻撃目標を決める。b を渡すとその建物を、null なら首都を狙う
+function orderAttack(c, b) {
+  if (!c.alive) return;
+  const P = G.player;
+  P.attackTarget = c; P.targetB = b && b.type !== 'capital' ? b : null;
+  if (P.ratio === 0) { P.ratio = 0.5; log('⚔ 攻撃の割合を 50% にしました（スライダーで変えられます）'); }
+  log(`🎯 目標：${c.name}の${P.targetB ? nameOf(P.targetB) : '首都'}`, 'good');
+  rebalance(P);
+  refreshHud();
+}
+function setRatio(v) {
+  const P = G.player;
+  P.ratio = clamp(v, 0, 1);
+  rebalance(P);
+  refreshHud();
+}
+function select(kind, key) {
+  if (!G || G.phase !== 'play') return;
+  if (!kind || (G.sel && G.sel.key === key)) G.sel = null;
+  else {
+    const def = BUILD[key] || TOOLS[key];
+    if (def.era && G.player.era < def.era) { log(`🔒 ${def.name}は${ERAS[def.era].name}で使えます`, 'warn'); return; }
+    G.sel = { kind, key }; G.pick = null;
+  }
+  refreshHud();
+}
+
+// =====================================================================
+// 入力
+// =====================================================================
+const raycaster = new THREE.Raycaster();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.35);
+const _v = new THREE.Vector3(), _m2 = new THREE.Vector2();
+let hover = null, painting = false, brush = T.MOUNTAIN, brushSize = 1;
+const hoverMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, depthWrite: false }));
+const rangeRing = new THREE.Mesh(new THREE.RingGeometry(0.96, 1, 64).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false }));
+hoverMesh.renderOrder = 5; rangeRing.renderOrder = 5;
+scene.add(hoverMesh, rangeRing);
+hoverMesh.visible = rangeRing.visible = false;
+const targetMarker = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.6, 4).rotateX(Math.PI),
+  new THREE.MeshBasicMaterial({ color: 0xff3a2a }));
+const pickRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.68, 32).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0xffcf4a, transparent: true, opacity: 0.9, depthWrite: false }));
+pickRing.renderOrder = 5;
+scene.add(targetMarker, pickRing);
+targetMarker.visible = pickRing.visible = false;
+
+function pickTile(ev) {
+  if (!G) return null;
+  _m2.set(ev.clientX / innerWidth * 2 - 1, -(ev.clientY / innerHeight) * 2 + 1);
+  raycaster.setFromCamera(_m2, camera);
+  if (!raycaster.ray.intersectPlane(groundPlane, _v)) return null;
+  const tx = tOf(_v.x), tz = tOf(_v.z);
+  if (tx < 0 || tz < 0 || tx >= G.size || tz >= G.size) return null;
+  return { tx, tz };
+}
+function paintAt(h) {
+  if (!h) return;
+  const r = brushSize - 1;
+  for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+    const x = h.tx + dx, z = h.tz + dz;
+    if (x < 0 || z < 0 || x >= G.size || z >= G.size || nearCapital(x, z, 2)) continue;
+    const i = z * G.size + x;
+    if (G.tiles[i] !== brush) { G.tiles[i] = brush; G.dirtyTerrain = true; }
+  }
+}
+function useTool(key, h) {
+  const P = G.player, i = h.tz * G.size + h.tx, t = G.tiles[i], cost = costOf(P, key);
+  if (!canAfford(P, cost)) { log('資源が足りません', 'warn'); return; }
+  if (key === 'blast') {
+    if (t !== T.FOREST && t !== T.ROCK && t !== T.MOUNTAIN) { log('森・岩場・山にだけ使えます', 'warn'); return; }
+    pay(P, cost); G.tiles[i] = T.GRASS;
+    boom(wOf(h.tx), 0.8, wOf(h.tz), 0xffa040, 18, 1.4); shake = 0.25;
+  } else {
+    if (t === T.MOUNTAIN || t === T.WATER) { log('もう山か水です', 'warn'); return; }
+    if (G.occ[i] || nearCapital(h.tx, h.tz, 1)) { log('建物の上には作れません', 'warn'); return; }
+    const old = t;
+    G.tiles[i] = key === 'mountain' ? T.MOUNTAIN : T.WATER;
+    if (!allConnected()) { G.tiles[i] = old; log('すべての国への道がふさがるので置けません', 'warn'); return; }
+    pay(P, cost);
+    boom(wOf(h.tx), 0.6, wOf(h.tz), key === 'mountain' ? 0x8f8373 : 0x3f8fd4, 8, 0.8);
+  }
+  G.dirtyTerrain = true;
+}
+canvas.addEventListener('pointermove', (ev) => {
+  hover = pickTile(ev);
+  if (painting && G && G.phase === 'edit') paintAt(hover);
+});
+canvas.addEventListener('pointerdown', (ev) => {
+  if (ev.button !== 0 || !G) return;
+  hover = pickTile(ev);
+  if (G.phase === 'edit') { painting = true; paintAt(hover); return; }
+  if (G.phase !== 'play' || !hover) return;
+  const P = G.player;
+  if (!G.sel) {
+    // 何もえらんでいないとき：自分の建物 → くわしく見る／敵の建物 → 攻撃目標にする
+    const b = G.occ[hover.tz * G.size + hover.tx];
+    G.pick = b && b.civ === P ? b : null;
+    if (b && b.civ !== P) orderAttack(b.civ, b);
+    return;
+  }
+  const { kind, key } = G.sel;
+  if (kind === 'tool') { useTool(key, hover); refreshHud(); return; }
+  const why = canPlace(P, key, hover.tx, hover.tz);
+  if (why) { log(why, 'warn'); return; }
+  const cost = costOf(P, key);
+  if (!canAfford(P, cost)) { log('資源が足りません', 'warn'); return; }
+  pay(P, cost);
+  placeBuilding(P, key, hover.tx, hover.tz, false, cost);
+  refreshHud();
+});
+// 情報パネルのボタン（中身が毎フレーム書きかわるので、押した瞬間に反応させる）
+$('info').addEventListener('pointerdown', (ev) => {
+  const act = ev.target.closest('[data-act]')?.dataset.act, b = G && G.pick;
+  if (!act || !b) return;
+  if (act === 'reno') { if (!startReno(b)) log('資源が足りません', 'warn'); }
+  if (act === 'cancel') { cancelSite(b); log('🚫 建築をやめた（資源の半分がもどった）'); }
+  if (act === 'pause') b.paused = !b.paused;
+  refreshHud();
+});
+addEventListener('pointerup', () => { painting = false; });
+const keys = new Set();
+addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const k = e.key.toLowerCase();
+  keys.add(k);
+  if (!G || G.phase !== 'play') return;
+  if (k === 'escape') { G.pick = null; select(null); }
+  if (k === ' ') { e.preventDefault(); setSpeed(G.speed === 0 ? 1 : 0); }
+  const n = parseInt(k, 10);
+  if (n >= 1 && n <= Math.min(9, BUILD_KEYS.length)) select('build', BUILD_KEYS[n - 1]);
+});
+addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+addEventListener('blur', () => keys.clear());
+function panKeys(dt) {
+  const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize();
+  const r = new THREE.Vector3().crossVectors(f, camera.up).normalize();
+  const v = new THREE.Vector3();
+  if (keys.has('w') || keys.has('arrowup')) v.add(f);
+  if (keys.has('s') || keys.has('arrowdown')) v.sub(f);
+  if (keys.has('d') || keys.has('arrowright')) v.add(r);
+  if (keys.has('a') || keys.has('arrowleft')) v.sub(r);
+  if (!v.lengthSq()) return;
+  v.normalize().multiplyScalar(dt * camera.position.distanceTo(controls.target) * 0.9);
+  camera.position.add(v); controls.target.add(v);
+}
+function focusCamera(x, z, dist) {
+  controls.target.set(x, 0, z);
+  camera.position.set(x, dist * 0.75, z + dist * 0.66);
+  controls.update();
+}
+function updateHover() {
+  hoverMesh.visible = rangeRing.visible = false;
+  if (!G || !hover || G.phase === 'over' || (G.phase === 'play' && !G.sel)) { updateInfo(); return; }
+  const i = hover.tz * G.size + hover.tx, h = TERRAIN[G.tiles[i]].h, x = wOf(hover.tx), z = wOf(hover.tz);
+  hoverMesh.visible = true;
+  hoverMesh.position.set(x, h + 0.03, z);
+  if (G.phase === 'edit') {
+    hoverMesh.scale.setScalar(brushSize * 2 - 1);
+    hoverMesh.material.color.setHex(TERRAIN[brush].color);
+  } else {
+    hoverMesh.scale.setScalar(1);
+    const { kind, key } = G.sel;
+    let ok = true;
+    if (kind === 'build') ok = !canPlace(G.player, key, hover.tx, hover.tz) && canAfford(G.player, costOf(G.player, key));
+    else ok = canAfford(G.player, costOf(G.player, key));
+    hoverMesh.material.color.setHex(ok ? 0x46e26a : 0xff5a4a);
+    const rr = key === 'turret' ? ERAS[G.player.era].turret.range : key === 'shield' ? SHIELD_R : 0;
+    if (rr) { rangeRing.visible = true; rangeRing.position.set(x, 0.4, z); rangeRing.scale.setScalar(rr); }
+  }
+  updateInfo();
+}
+let infoKey = '';
+function updateInfo() {
+  const el = $('info');
+  if (!G || G.phase !== 'play') { el.hidden = true; return; }
+  el.hidden = false;
+  let html = '';
+  const P = G.player;
+  if (G.pick && !G.pick.dead) html += pickHtml(G.pick) + '<hr style="border-color:var(--line)">';
+  if (G.sel) {
+    const def = BUILD[G.sel.key] || TOOLS[G.sel.key];
+    html += `<b>${def.icon} ${def.name}</b><br><span style="color:var(--muted)">${def.desc}</span><br>`;
+    if (def.time) html += `🔨 建てる時間：兵士1人で${def.time}秒（2人で半分）<br>`;
+    if (def.trains) { const s = unitStats(def.trains, P.era); html += `作る兵：${s.name}（1人 ${costText(P, s.cost)}・${s.time}秒）<br>`; }
+    if (G.sel.key === 'turret') { const tr = ERAS[P.era].turret; html += `いまの形：${tr.name}（射程 ${tr.range}）<br>`; }
+    if (hover && G.sel.kind === 'build') { const why = canPlace(P, G.sel.key, hover.tx, hover.tz); if (why) html += `<span style="color:var(--bad)">${why}</span><br>`; }
+    html += '<span style="color:var(--muted)">左クリックで置く ／ Escでやめる</span><hr style="border-color:var(--line)">';
+  }
+  if (hover) {
+    const i = hover.tz * G.size + hover.tx, o = G.owner[i], b = G.occ[i];
+    html += `${TERRAIN[G.tiles[i]].icon} ${TERRAIN[G.tiles[i]].name}`;
+    if (o >= 0) html += ` ・ ${G.civs[o].name}の領土`;
+    if (b && b !== G.pick) {
+      html += `<br><b>${BUILD[b.type].icon} ${nameOf(b)}</b>（${b.civ.name}・${ERAS[b.era].name}）<br>HP ${Math.ceil(b.hp)} / ${Math.ceil(b.maxHp)}`;
+      if (!b.done) html += ` ・ 建築中 ${Math.floor(b.progress * 100)}%`;
+      if (b.type === 'shield' && b.done) html += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
+      if (!G.sel) html += `<br><span style="color:var(--muted)">${b.civ === P ? 'クリックでくわしく見る' : 'クリックで攻撃目標にする'}</span>`;
+    }
+  } else if (!G.sel && !G.pick) html = '<span style="color:var(--muted)">左クリック：置く／自分の建物を見る／敵の建物を狙う<br>右ドラッグ：回転 ／ ホイール：拡大 ／ WASD：移動<br>1〜9：建物をえらぶ ／ スペース：一時停止</span>';
+  if (html !== infoKey) { infoKey = html; el.innerHTML = html; }
+}
+// えらんだ自分の建物のくわしい情報と、ボタン
+function pickHtml(b) {
+  const P = G.player, def = BUILD[b.type];
+  let h = `<b>${def.icon} ${nameOf(b)}</b>（${ERAS[b.era].name}のもの）<br>HP ${Math.ceil(b.hp)} / ${Math.ceil(b.maxHp)}`;
+  const crew = G.units.filter((u) => u.job === b).length;
+  if (!b.done) {
+    h += `<br>🔨 建築中 ${Math.floor(b.progress * 100)}%（作業中の兵士 ${crew}人）`;
+    if (!crew) h += '<br><span style="color:var(--bad)">建てに来る兵士がいません（守りの兵士が必要）</span>';
+    h += '<br><button data-act="cancel">🚫 建築をやめる（半分もどる）</button>';
+    return h;
+  }
+  if (b.type === 'shield') h += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
+  if (b.type === 'turret' || b.type === 'capital') { const tr = ERAS[b.era].turret; h += `<br>攻撃：${tr.name}（射程 ${tr.range}・威力 ${tr.dmg}）`; }
+  const p = prodOf(b);
+  if (p) h += '<br>生産：' + Object.entries(p).map(([k, v]) => `${RES_ICON[k]}+${v.toFixed(1)}`).join(' ') + '/秒';
+  if (b.boost > 1) h += '<br>🏭 工場の近くなので1.5倍';
+  if (def.trains) {
+    const s = unitStats(def.trains, b.era);
+    h += `<br>作る兵：${s.name}（1人 ${costText(P, s.cost)}・${s.time}秒）<br>食べる量：1人 🍖${s.upkeep}/秒`;
+    h += `<br><button data-act="pause">${b.paused ? '▶ 兵づくりを再開' : '⏸ 兵づくりを停止'}</button>`;
+  }
+  if (b.reno) h += `<br>🔨 改修中 ${Math.floor(b.renoProg * 100)}%（作業中の兵士 ${crew}人）`;
+  else if (canRenovate(b)) {
+    h += `<br><button data-act="reno">🔨 改修 → ${ERAS[P.era].name}</button> <span class="cs">${costText(P, renoCost(P, b.type))}</span>`;
+  } else if (b.type !== 'capital') h += '<br><span style="color:var(--muted)">今の時代のものです</span>';
+  return h;
+}
+
+// =====================================================================
+// 画面の切りかえ
+// =====================================================================
+function renderEnemyRows() {
+  const n = +$('s-enemies').value;
+  $('s-enemies-v').textContent = n;
+  const box = $('enemy-rows');
+  const prev = [...box.querySelectorAll('.erow')].map((r) => ({ p: r.querySelector('.p').value, g: r.querySelector('.g').value }));
+  box.innerHTML = '';
+  for (let i = 1; i <= n; i++) {
+    const d = CIV_DEFS[i], pv = prev[i - 1];
+    const row = document.createElement('div');
+    row.className = 'erow';
+    row.innerHTML = `<span class="dot" style="background:${d.css}"></span><span>${d.name}</span>
+      <select class="p">${Object.entries(PERSONALITY).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('')}</select>
+      <select class="g"><option value="0.75">発展おそい</option><option value="1">発展ふつう</option><option value="1.35">発展はやい</option></select>`;
+    row.querySelector('.p').value = pv ? pv.p : DEFAULT_PERS[i - 1];
+    row.querySelector('.g').value = pv ? pv.g : '1';
+    box.appendChild(row);
+  }
+}
+function readConfig() {
+  return {
+    size: +$('s-size').value,
+    mountain: $('s-mountain').value / 100, water: $('s-water').value / 100,
+    forest: $('s-forest').value / 100, rock: $('s-rock').value / 100,
+    grace: +$('s-grace').value,
+    enemies: [...document.querySelectorAll('.erow')].map((r) => ({ pers: r.querySelector('.p').value, growth: +r.querySelector('.g').value })),
+  };
+}
+function loadBest() { try { return JSON.parse(localStorage.getItem('ces-best') || 'null'); } catch { return null; } }
+function saveBest(b) { try { localStorage.setItem('ces-best', JSON.stringify(b)); } catch { /* 保存できなくても遊べる */ } }
+function showBest() {
+  const b = loadBest();
+  $('best').textContent = b ? `自己ベスト：${ERAS[b.era].name}・${b.years}年` : '';
+}
+function toSetup() {
+  clearWorld();
+  $('setup').hidden = false; $('editbar').hidden = true; $('hud').hidden = true; $('gameover').hidden = true;
+  showBest();
+}
+function toEdit() {
+  newWorld(readConfig());
+  $('setup').hidden = true; $('editbar').hidden = false; $('edit-msg').textContent = '';
+}
+function startGame() {
+  if (!allConnected()) {
+    $('edit-msg').textContent = 'すべての国が陸でつながるようにしてください（山や水で道がふさがっています）';
+    return;
+  }
+  G.flows.clear();
+  G.phase = 'play';
+  $('editbar').hidden = true; $('hud').hidden = false;
+  for (const c of G.civs) {
+    for (let k = 0; k < 2; k++) spawnUnit(c, c.capital.x + (Math.random() - 0.5) * 2, c.capital.z + 1.2);
+    if (!c.isPlayer) c.waveTimer = G.cfg.grace + (c.id - 1) * 15 + Math.random() * 15;
+  }
+  buildHudLists();
+  buildCivRows();
+  setSpeed(1);
+  focusCamera(G.player.capital.x, G.player.capital.z, 24);
+  log('👑 あなたは「あなたの国」の王です。首都を守りながら、時代を進めよう！', 'era');
+  log(`⏳ 最初の攻撃まで、およそ${G.cfg.grace}秒`);
+}
+function gameOver() {
+  G.phase = 'over';
+  const years = Math.floor(G.time * 10);
+  const cur = { era: G.maxEra, years };
+  const best = loadBest();
+  const isBest = !best || cur.era > best.era || (cur.era === best.era && cur.years > best.years);
+  if (isBest) saveBest(cur);
+  const b = isBest ? cur : best;
+  $('go-era').textContent = `到達した時代：${ERAS[G.maxEra].name}`;
+  $('go-years').textContent = `${years}年`;
+  $('go-kills').textContent = `${G.player.kills}人`;
+  $('go-civs').textContent = `${G.civKills}国`;
+  $('go-best').textContent = `${ERAS[b.era].name}・${b.years}年${isBest ? '（新記録！）' : ''}`;
+  setTimeout(() => { $('gameover').hidden = false; $('hud').hidden = true; }, 1800);
+}
+function setSpeed(s) {
+  G.speed = s;
+  for (const b of document.querySelectorAll('[data-speed]')) b.classList.toggle('on', +b.dataset.speed === s);
+}
+
+// ボタンのつなぎこみ
+$('s-enemies').addEventListener('input', renderEnemyRows);
+$('btn-to-edit').onclick = toEdit;
+$('btn-back').onclick = toSetup;
+$('btn-regen').onclick = () => { G.seed = (Math.random() * 1e9) | 0; generateTerrain(G.seed); G.dirtyTerrain = true; };
+$('btn-start').onclick = startGame;
+$('btn-retry').onclick = toSetup;
+$('btn-era').onclick = () => { if (G && canAfford(G.player, ERAS[G.player.era + 1]?.cost || { x: 1 })) advanceEra(G.player); refreshHud(); };
+$('cmd-def').onclick = () => { setRatio(0); log('🛡 全員、首都にもどれ！'); };
+$('cmd-ratio').addEventListener('input', (e) => setRatio(e.target.value / 100));
+for (const b of document.querySelectorAll('[data-speed]')) b.onclick = () => setSpeed(+b.dataset.speed);
+(() => {
+  const box = $('brushes');
+  TERRAIN.forEach((t, i) => {
+    const b = document.createElement('button');
+    b.textContent = `${t.icon} ${t.name}`;
+    b.onclick = () => { brush = i; for (const x of box.children) x.classList.toggle('on', x === b); };
+    if (i === brush) b.classList.add('on');
+    box.appendChild(b);
+  });
+  const sz = $('brush-sizes');
+  [1, 2, 3].forEach((s) => {
+    const b = document.createElement('button');
+    b.textContent = ['小', '中', '大'][s - 1];
+    b.onclick = () => { brushSize = s; for (const x of sz.children) x.classList.toggle('on', x === b); };
+    if (s === brushSize) b.classList.add('on');
+    sz.appendChild(b);
+  });
+})();
+renderEnemyRows();
+showBest();
+// 開発用：URL に ?debug をつけると、コンソールから状態をさわれる
+if (new URLSearchParams(location.search).has('debug')) {
+  window.ces = {
+    get G() { return G; }, advanceEra, placeBuilding, spawnUnit, findSpot, aiThink, orderAttack, setRatio,
+    startReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
+    // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
+    step(sec) { for (let t = 0; t < sec && G.phase === 'play'; t += 0.05) update(0.05); },
+  };
+}
+
+// =====================================================================
+// メインループ
+// =====================================================================
+let last = performance.now(), hudT = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = Math.min(0.1, (now - last) / 1000);
+  last = now;
+  if (G) {
+    if (G.dirtyTerrain) {
+      G.dirtyTerrain = false;
+      updateTerrain();
+      if (G.phase === 'play') { G.flows.clear(); for (const b of G.buildings) calcAdj(b); }
+    }
+    if (G.phase === 'play' && G.speed > 0) {
+      const sdt = rdt * G.speed, steps = Math.ceil(sdt / 0.05);
+      for (let k = 0; k < steps && G.phase === 'play'; k++) update(sdt / steps);
+    }
+    syncVisuals(G.phase === 'play' && G.speed === 0 ? 0 : rdt);
+    updateHover();
+    hudT -= rdt;
+    if (G.phase === 'play' && hudT <= 0) { hudT = 0.25; refreshHud(); }
+  } else {
+    controls.target.set(0, 0, 0);
+  }
+  panKeys(rdt);
+  controls.update();
+  if (shake > 0) {
+    shake = Math.max(0, shake - rdt);
+    camera.position.x += (Math.random() - 0.5) * shake * 0.6;
+    camera.position.y += (Math.random() - 0.5) * shake * 0.6;
+  }
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
