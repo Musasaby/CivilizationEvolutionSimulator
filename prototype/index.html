@@ -2176,6 +2176,40 @@ canvas.addEventListener('pointerdown', (ev) => {
   // マウスは誤操作の心配がないので、押した瞬間から塗る
   if (G.phase === 'edit' && !tap.touch) { painting = true; paintAt(hover); }
 });
+// 2本指をひねると、カメラを上下の軸のまわりに回す（拡大縮小・移動は OrbitControls のまま）
+const twist = { pts: new Map(), last: null, sum: 0 };
+const TWIST_START = 0.12;   // ピンチ中の小さなぶれで回らないよう、これだけひねったら回しはじめる（ラジアン）
+const _yAxis = new THREE.Vector3(0, 1, 0), _off = new THREE.Vector3();
+function twistAngle() {
+  const [a, b] = [...twist.pts.values()];
+  return Math.atan2(b.y - a.y, b.x - a.x);
+}
+canvas.addEventListener('pointerdown', (ev) => {
+  if (ev.pointerType !== 'touch') return;
+  twist.pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  twist.last = twist.pts.size === 2 ? twistAngle() : null;
+  twist.sum = 0;
+});
+canvas.addEventListener('pointermove', (ev) => {
+  const pt = twist.pts.get(ev.pointerId);
+  if (!pt) return;
+  pt.x = ev.clientX; pt.y = ev.clientY;
+  if (twist.last === null) return;
+  const a = twistAngle();
+  let d = a - twist.last;
+  d = Math.atan2(Math.sin(d), Math.cos(d));   // -π〜π にそろえる
+  twist.last = a;
+  if (Math.abs(twist.sum) < TWIST_START) { twist.sum += d; if (Math.abs(twist.sum) < TWIST_START) return; d = twist.sum; }
+  _off.subVectors(camera.position, controls.target).applyAxisAngle(_yAxis, -d);   // 地図が指といっしょに回るように
+  camera.position.copy(controls.target).add(_off);
+});
+function endTwist(ev) {
+  twist.pts.delete(ev.pointerId);
+  twist.last = twist.pts.size === 2 ? twistAngle() : null;
+  twist.sum = 0;
+}
+canvas.addEventListener('pointerup', endTwist);
+canvas.addEventListener('pointercancel', endTwist);
 function endPointer(ev) {
   pointers.delete(ev.pointerId);
   const t = tap;
@@ -2445,7 +2479,7 @@ showBest();
 // 開発用：URL に ?debug をつけると、コンソールから状態をさわれる
 if (new URLSearchParams(location.search).has('debug')) {
   window.ces = {
-    get G() { return G; }, advanceEra, placeBuilding, spawnUnit, findSpot, aiThink, orderAttack, setRatio,
+    get G() { return G; }, camera, controls, advanceEra, placeBuilding, spawnUnit, findSpot, aiThink, orderAttack, setRatio,
     startReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
     // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
     step(sec) { for (let t = 0; t < sec && G.phase === 'play'; t += 0.05) update(0.05); },
