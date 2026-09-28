@@ -817,7 +817,7 @@ function setBar(bar, show, ratio) {
 // ゲームの状態
 // =====================================================================
 let G = null;
-let terrainGroup = null, tileMesh = null, treeMesh = null, mtnMesh = null, snowMesh = null, rockMesh = null;
+let terrainGroup = null, borderMesh = null, tileMesh = null, treeMesh = null, mtnMesh = null, snowMesh = null, rockMesh = null;
 
 function newWorld(cfg) {
   clearWorld();
@@ -857,7 +857,10 @@ function clearWorld() {
   for (const u of G.units) scene.remove(u.mesh);
   for (const p of G.projectiles) scene.remove(p.m);
   for (const f of G.fx) scene.remove(f.m);
-  if (terrainGroup) { scene.remove(terrainGroup); tileMesh.material.dispose(); terrainGroup = null; }
+  if (terrainGroup) {
+    scene.remove(terrainGroup); tileMesh.material.dispose(); borderMesh.geometry.dispose(); borderMesh.material.dispose();
+    terrainGroup = null; borderMesh = null;
+  }
   G = null;
 }
 
@@ -1003,7 +1006,9 @@ function buildTerrainMeshes() {
   snowMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(0.72, 1, 5).translate(0, 0.5, 0), mat(0xf4f6f8), N);
   rockMesh = new THREE.InstancedMesh(GEO.dode, mat(0x8d8d85), N * 2);
   for (const m of [treeMesh, mtnMesh, snowMesh, rockMesh]) { m.castShadow = true; m.receiveShadow = true; }
-  terrainGroup.add(tileMesh, treeMesh, mtnMesh, snowMesh, rockMesh);
+  borderMesh = new THREE.Mesh(new THREE.BufferGeometry(),
+    new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
+  terrainGroup.add(tileMesh, treeMesh, mtnMesh, snowMesh, rockMesh, borderMesh);
   scene.add(terrainGroup);
 }
 const _o = new THREE.Object3D();
@@ -1054,6 +1059,36 @@ function updateTileColors() {
     tileMesh.setColorAt(i, _c);
   }
   tileMesh.instanceColor.needsUpdate = true;
+  updateBorders();
+}
+// 領土の境界に、国の色の帯を引く（草の色にまぎれないように明るくする）
+const BORDER_W = 0.14;
+const BORDER_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+function updateBorders() {
+  const S = G.size, pos = [], col = [];
+  const ownerAt = (x, z) => {
+    if (x < 0 || z < 0 || x >= S || z >= S) return -1;
+    const i = z * S + x;
+    return G.tiles[i] === T.WATER ? -1 : G.owner[i];
+  };
+  for (let z = 0; z < S; z++) for (let x = 0; x < S; x++) {
+    const o = ownerAt(x, z);
+    if (o < 0) continue;
+    _c.setHex(G.civs[o].color).lerp(_cc.setHex(0xffffff), 0.35);
+    const y = TERRAIN[G.tiles[z * S + x]].h + 0.02, wx = wOf(x), wz = wOf(z);
+    for (const [dx, dz] of BORDER_DIRS) {
+      if (ownerAt(x + dx, z + dz) === o) continue;
+      // マスの内側に、境目にそった細い四角を置く
+      const ex = wx + dx * 0.5, ez = wz + dz * 0.5, ix = ex - dx * BORDER_W, iz = ez - dz * BORDER_W;
+      const tx = dz ? 0.5 : 0, tz = dx ? 0.5 : 0;
+      const q = [[ex - tx, ez - tz], [ex + tx, ez + tz], [ix + tx, iz + tz], [ix - tx, iz - tz]];
+      for (const k of [0, 1, 2, 0, 2, 3]) { pos.push(q[k][0], y, q[k][1]); col.push(_c.r, _c.g, _c.b); }
+    }
+  }
+  const g = borderMesh.geometry;
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.computeBoundingSphere();
 }
 function adjCount(tx, tz, types) {
   let n = 0;
@@ -2107,15 +2142,55 @@ function useTool(key, h) {
   }
   G.dirtyTerrain = true;
 }
+// タップ（クリック）は「離したとき」に決める。2本指で拡大・縮小したときや、
+// 指を動かしてカメラを回したときに、建物が建ってしまわないようにするため
+const pointers = new Set();   // 画面にふれている指・マウスのボタン
+let tap = null;               // 押したけれど、まだ決まっていない操作
+const TAP_MOVE = 10;          // これより動いたらタップではない（px）
+const TOUCH_PAINT_DELAY = 80; // タッチで塗りはじめるまで待つ時間（ms）。2本目の指を待つ
+function cancelTap() {
+  tap = null;
+  if (painting) { painting = false; controls.enabled = true; }
+}
 canvas.addEventListener('pointermove', (ev) => {
   hover = pickTile(ev);
-  if (painting && G && G.phase === 'edit') paintAt(hover);
-});
+  if (!G) return;
+  if (tap && tap.id === ev.pointerId && Math.hypot(ev.clientX - tap.x, ev.clientY - tap.y) > TAP_MOVE) {
+    tap.moved = true;
+    // タッチでは、指1本のまま少し待ってから塗りはじめる（そのあいだはカメラを止める）
+    if (G.phase === 'edit' && tap.touch && !painting && pointers.size === 1 &&
+      performance.now() - tap.t > TOUCH_PAINT_DELAY) {
+      painting = true; controls.enabled = false; paintAt(tap.tile);
+    }
+  }
+  if (painting && G.phase === 'edit') paintAt(hover);
+}, { capture: true });   // カメラ操作より先に動かして、塗りはじめた瞬間にカメラが回らないようにする
 canvas.addEventListener('pointerdown', (ev) => {
+  if (ev.isPrimary) pointers.clear();   // 取りこぼした指が残らないように
+  pointers.add(ev.pointerId);
+  if (pointers.size > 1) { cancelTap(); return; }
   if (ev.button !== 0 || !G) return;
   hover = pickTile(ev);
-  if (G.phase === 'edit') { painting = true; paintAt(hover); return; }
-  if (G.phase !== 'play' || !hover) return;
+  tap = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, t: performance.now(),
+    touch: ev.pointerType !== 'mouse', tile: hover, moved: false };
+  // マウスは誤操作の心配がないので、押した瞬間から塗る
+  if (G.phase === 'edit' && !tap.touch) { painting = true; paintAt(hover); }
+});
+function endPointer(ev) {
+  pointers.delete(ev.pointerId);
+  const t = tap;
+  if (!t || t.id !== ev.pointerId) return;
+  const wasPainting = painting;
+  cancelTap();
+  if (wasPainting || t.moved || ev.type === 'pointercancel' || !G) return;
+  if (G.phase === 'edit') paintAt(t.tile);
+  else if (G.phase === 'play') tapTile(t.tile);
+}
+addEventListener('pointerup', endPointer);
+addEventListener('pointercancel', endPointer);
+function tapTile(h) {
+  hover = h;
+  if (!h) return;
   const P = G.player;
   if (!G.sel) {
     // 何もえらんでいないとき：自分の建物 → くわしく見る／敵の建物 → 攻撃目標にする
@@ -2133,7 +2208,7 @@ canvas.addEventListener('pointerdown', (ev) => {
   pay(P, cost);
   placeBuilding(P, key, hover.tx, hover.tz, false, cost);
   refreshHud();
-});
+}
 // 情報パネルのボタン（中身が毎フレーム書きかわるので、押した瞬間に反応させる）
 $('info').addEventListener('pointerdown', (ev) => {
   const act = ev.target.closest('[data-act]')?.dataset.act, b = G && G.pick;
@@ -2143,7 +2218,6 @@ $('info').addEventListener('pointerdown', (ev) => {
   if (act === 'pause') b.paused = !b.paused;
   refreshHud();
 });
-addEventListener('pointerup', () => { painting = false; });
 const keys = new Set();
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
