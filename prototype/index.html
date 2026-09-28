@@ -2200,7 +2200,7 @@ canvas.addEventListener('pointermove', (ev) => {
   d = Math.atan2(Math.sin(d), Math.cos(d));   // -π〜π にそろえる
   twist.last = a;
   if (Math.abs(twist.sum) < TWIST_START) { twist.sum += d; if (Math.abs(twist.sum) < TWIST_START) return; d = twist.sum; }
-  _off.subVectors(camera.position, controls.target).applyAxisAngle(_yAxis, -d);   // 地図が指といっしょに回るように
+  _off.subVectors(camera.position, controls.target).applyAxisAngle(_yAxis, d);   // 地図が指といっしょに回るように
   camera.position.copy(controls.target).add(_off);
 });
 function endTwist(ev) {
