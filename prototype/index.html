@@ -331,11 +331,16 @@ const BUILD = {
   robotf:   { name: 'ロボット工場', icon: '🤖', era: 5, cost: { stone: 450, know: 150 }, hp: 300, time: 25, trains: 'robot', desc: 'ロボット兵を作る' },
   teleporter: { name: 'テレポーター', icon: '🌀', era: 5, cost: { stone: 300, know: 250 }, hp: 240, time: 25, desc: '攻撃に出た兵士がここへワープしてから進む。敵の近くに建てよう' },
   capital:  { name: '首都', icon: '🏰', hp: 1000, hidden: true },
+  // 地形の予定地（爆破・山・湖・埋め立て）。兵士が作業に行き、敵にも狙われる
+  terra:    { name: '地形の予定地', icon: '⛏', hp: 80, hidden: true, noTerr: true },
 };
+// time：兵士1人で作業したときの秒数（2人なら半分）。site：予定地の名前
 const TOOLS = {
-  blast:    { name: '爆破', icon: '💥', cost: { wood: 40, stone: 30 }, era: 3, desc: '森・岩場・山を草原にする。道を開ける' },
-  mountain: { name: '山を作る', icon: '⛰', cost: { stone: 90 }, era: 4, desc: '通れない山を作る。敵の通り道をしぼれる' },
-  water:    { name: '湖を作る', icon: '🌊', cost: { wood: 40, stone: 50 }, era: 4, desc: '通れない水を作る' },
+  demolish: { name: '撤去', icon: '🔨', cost: {}, desc: '自分の建物をこわす。兵士が作業に行き、建てたときの資源の半分がもどる。建築予定地はすぐ消える' },
+  blast:    { name: '爆破', icon: '💥', cost: { wood: 40, stone: 30 }, era: 3, time: 8, site: '爆破の予定地', to: T.GRASS, desc: '森・岩場・山を草原にする。道を開ける' },
+  mountain: { name: '山を作る', icon: '⛰', cost: { stone: 90 }, era: 4, time: 15, site: '山の予定地', to: T.MOUNTAIN, desc: '通れない山を作る。敵の通り道をしぼれる' },
+  water:    { name: '湖を作る', icon: '🌊', cost: { wood: 40, stone: 50 }, era: 4, time: 12, site: '湖の予定地', to: T.WATER, desc: '通れない水を作る' },
+  fill:     { name: '埋め立て', icon: '🏝', cost: { stone: 60, wood: 30 }, era: 4, time: 15, site: '埋め立ての予定地', to: T.GRASS, desc: '水を草原にする。岸から順に埋めていける' },
 };
 const SHIELD_R = 4.5;
 const WALL_COST = 12;      // 敵の壁1マスを「何マスぶんの回り道」とみなすか
@@ -367,20 +372,34 @@ function costText(c, cost) {
 }
 function canAfford(c, cost) { for (const k in cost) if (c.res[k] < cost[k]) return false; return true; }
 function pay(c, cost) { for (const k in cost) c.res[k] -= cost[k]; }
-function costOf(c, key) {
+function costOf(c, key) { return costAt(key, c.era); }
+function costAt(key, era) {
   const def = BUILD[key] || TOOLS[key];
   if (!def.scale) return def.cost;
-  const m = 1 + 0.4 * c.era, o = {};
+  const m = 1 + 0.4 * era, o = {};
   for (const k in def.cost) o[k] = Math.round(def.cost[k] * m);
   return o;
 }
+// 建物・予定地をやめたときにもどる資源。rate は 1（全額）か 0.5（半分）
+function refundOf(b, rate) {
+  const paid = b.paid || (b.type === 'terra' ? TOOLS[b.terra].cost : costAt(b.type, b.era0));
+  const o = {};
+  for (const k in paid) { const v = Math.floor(paid[k] * rate); if (v > 0) o[k] = v; }
+  return o;
+}
+function refund(c, o) { for (const k in o) c.res[k] += o[k]; }
+function resText(o) { return Object.entries(o).map(([k, v]) => `${RES_ICON[k]}${v}`).join(' ') || 'なし'; }
 // 改修は、新しく建てるときの半分
 function renoCost(c, key) {
   const o = {}, base = costOf(c, key);
   for (const k in base) o[k] = Math.ceil(base[k] / 2);
   return o;
 }
-function nameOf(b) { return b.type === 'turret' ? ERAS[b.era].turret.name : BUILD[b.type].name; }
+function nameOf(b) {
+  if (b.type === 'terra') return TOOLS[b.terra].site;
+  return b.type === 'turret' ? ERAS[b.era].turret.name : BUILD[b.type].name;
+}
+function iconOf(b) { return b.type === 'terra' ? TOOLS[b.terra].icon : BUILD[b.type].icon; }
 const wOf = (t) => t - G.size / 2 + 0.5;          // マス → 世界座標
 const tOf = (w) => Math.floor(w + G.size / 2);     // 世界座標 → マス
 
@@ -467,12 +486,21 @@ function flag(g, color, x, y0, z, h = 1) {
 // ---------------------------------------------------------------------
 // 建物の見た目（時代ごとに変わる）
 // ---------------------------------------------------------------------
-function makeBuilding(type, E, color) {
+function makeBuilding(type, E, color, terra) {
   const g = new THREE.Group();
   let head = null;
   const wall = ERAS[E].wall;
   const glass = 0x9fd6ff;
   switch (type) {
+    case 'terra': {
+      // 地形の予定地：道具ごとの目印と、国の旗
+      if (terra === 'blast') for (const [x, z] of [[-0.12, 0], [0.1, -0.08], [0.04, 0.12]]) add(g, GEO.cyl8, 0xc0392b, 0.08, 0.32, 0.08, x, 0, z);
+      else if (terra === 'mountain') add(g, GEO.cone6, 0x8f8373, 0.42, 0.7, 0.42);
+      else if (terra === 'water') add(g, GEO.cyl8, 0x3f8fd4, 0.38, 0.05, 0.38);
+      else add(g, GEO.cone6, 0x8a6a40, 0.42, 0.35, 0.42);   // 埋め立ての土
+      flag(g, color, 0.3, 0, 0.3, 0.8);
+      break;
+    }
     case 'capital': {
       if (E === 0) {
         add(g, GEO.cone6, wall, 0.85, 1.4, 0.85);
@@ -1103,7 +1131,7 @@ function adjCount(tx, tz, types) {
 function computeTerritory() {
   const S = G.size;
   G.owner.fill(-1); G.ownerD.fill(INF);
-  // 領土を広げるのは、できあがった建物だけ（建築中・壁は広げない）
+  // 領土を広げるのは、できあがった建物だけ（建築中・壁・地形の予定地は広げない）
   for (const b of G.buildings) {
     if (b.dead || !b.done || BUILD[b.type].noTerr) continue;
     const r = b.type === 'capital' ? 5 : 3;
@@ -1118,7 +1146,7 @@ function computeTerritory() {
     }
   }
   // 工場のまわり3マスは1.5倍
-  const factories = G.buildings.filter((f) => f.type === 'factory' && f.done && !f.dead);
+  const factories = G.buildings.filter((f) => f.type === 'factory' && f.done && !f.dead && !f.demo);
   for (const b of G.buildings) {
     b.boost = 1;
     if (b.dead || !b.done) continue;
@@ -1148,14 +1176,16 @@ function canPlace(c, type, tx, tz) {
   return null;
 }
 // done=false なら「建築予定地」になり、兵士が来て建てるまで動かない
-function placeBuilding(c, type, tx, tz, done = false, paid = null) {
+// terra をわたすと「地形の予定地」になる（type は 'terra'）
+function placeBuilding(c, type, tx, tz, done = false, paid = null, terra = null) {
   const b = {
-    isBuilding: true, type, civ: c, era: c.era, tx, tz, x: wOf(tx), z: wOf(tz), hp: 0, maxHp: 0,
+    isBuilding: true, type, civ: c, era: c.era, era0: c.era, tx, tz, x: wOf(tx), z: wOf(tz), hp: 0, maxHp: 0,
     cd: Math.random(), timer: 0, adj: 0, dead: false, flash: 0, grow: 0, aim: 0, boost: 1,
-    done, progress: done ? 1 : 0, reno: false, renoProg: 0, paid, paused: false, tpcd: 0,
+    done, progress: done ? 1 : 0, reno: false, renoProg: 0, demo: false, demoProg: 0, paid, paused: false, tpcd: 0, terra,
   };
   b.maxHp = baseHp(b);
-  b.hp = done ? b.maxHp : b.maxHp * 0.1;
+  // 地形の予定地は、置いたときから HP が満タン（作業しても HP は変わらない）
+  b.hp = done || terra ? b.maxHp : b.maxHp * 0.1;
   G.occ[tz * G.size + tx] = b;
   G.buildings.push(b);
   if (type === 'capital') c.capital = b;
@@ -1190,29 +1220,67 @@ function finishBuilding(b, silent) {
 }
 function buildMeshFor(b) {
   if (b.mesh) scene.remove(b.mesh);
-  const { group, head } = makeBuilding(b.type, b.era, b.civ.color);
-  group.position.set(b.x, 0.35, b.z);
+  const { group, head } = makeBuilding(b.type, b.era, b.civ.color, b.terra);
+  group.position.set(b.x, b.terra ? TERRAIN[G.tiles[b.tz * G.size + b.tx]].h : 0.35, b.z);
   b.mesh = group; b.head = head; b.grow = 0;
   scene.add(group);
 }
 function removeBuildingVisuals(b) {
   for (const m of [b.mesh, b.dome, b.bar, b.wbar, b.scaf]) if (m) scene.remove(m);
 }
-// 建築・改修の作業。兵士1人ぶんの dt 秒の作業を加える
+// 建物をマップから取りのぞく後片付け（壊された・撤去した・予定地をやめた、のどれでも使う）
+function removeBuilding(b) {
+  b.dead = true;
+  removeBuildingVisuals(b);
+  G.occ[b.tz * G.size + b.tx] = null;
+  G.dirtyTerritory = true;
+  if (b.type === 'wall') G.flows.clear();
+  if (G.pick === b) G.pick = null;
+  recalcPop(b.civ);
+}
+function workTime(b) { return b.type === 'terra' ? TOOLS[b.terra].time : BUILD[b.type].time; }
+// 建築・改修・撤去・地形の作業。兵士1人ぶんの dt 秒の作業を加える
 function addWork(b, dt) {
-  const def = BUILD[b.type];
+  const time = workTime(b);
   if (!b.done) {
-    const dp = dt / def.time;
+    const dp = dt / time;
     b.progress = Math.min(1, b.progress + dp);
+    if (b.type === 'terra') { if (b.progress >= 1) finishTerra(b); return; }
     b.hp = Math.min(b.maxHp, b.hp + b.maxHp * 0.9 * dp);
     if (b.progress >= 1) finishBuilding(b);
+  } else if (b.demo) {
+    b.demoProg += dt / time;
+    if (b.demoProg >= 1) finishDemolish(b);
   } else if (b.reno) {
-    b.renoProg += dt / (def.time * 0.5);
+    b.renoProg += dt / (time * 0.5);
     if (b.renoProg >= 1) finishReno(b);
   }
 }
 function canRenovate(b) {
-  return b.done && !b.dead && !b.reno && b.type !== 'capital' && b.era < b.civ.era;
+  return b.done && !b.dead && !b.reno && !b.demo && b.type !== 'capital' && b.era < b.civ.era;
+}
+// 撤去：兵士が作業に行き、建てるのと同じ時間で壊す。そのあいだ建物は止まる
+function canDemolish(b) { return b.done && !b.dead && !b.demo && !b.reno && b.type !== 'capital'; }
+function startDemolish(b) {
+  if (!canDemolish(b)) return false;
+  b.demo = true; b.demoProg = 0;
+  b.scaf = makeScaffold(); b.scaf.position.set(b.x, 0.35, b.z); scene.add(b.scaf);
+  G.dirtyTerritory = true;   // 工場の効果を止めるため
+  return true;
+}
+// やめると、進み具合は失われる
+function stopDemolish(b) {
+  if (!b.demo || b.dead) return;
+  b.demo = false; b.demoProg = 0;
+  if (b.scaf) { scene.remove(b.scaf); b.scaf = null; }
+  G.dirtyTerritory = true;
+}
+function finishDemolish(b) {
+  const o = refundOf(b, 0.5);
+  refund(b.civ, o);
+  removeBuilding(b);
+  boom(b.x, 0.5, b.z, 0xd8c8a0, 5, 0.5);
+  if (b.civ.isPlayer) log(`🔨 ${nameOf(b)}を撤去した（${resText(o)} がもどった）`, 'good');
 }
 function startReno(b) {
   const c = b.civ, cost = renoCost(c, b.type);
@@ -1231,14 +1299,88 @@ function finishReno(b) {
   ringFx(b.x, b.z, 0xffd84a, 3);
   if (b.civ.isPlayer) log(`🔨 ${old}を改修した → ${ERAS[b.era].name}の${nameOf(b)}`, 'good');
 }
-// 建築予定地をやめる（払った資源の半分がもどる）
+// 建築予定地・地形の予定地をやめる。まだ誰も作業していなければ全額、作業が始まっていたら半分もどる
+// もどった資源を返す
 function cancelSite(b) {
-  if (b.done || b.dead) return;
-  if (b.paid) for (const k in b.paid) b.civ.res[k] += Math.floor(b.paid[k] / 2);
-  b.dead = true;
-  removeBuildingVisuals(b);
-  G.occ[b.tz * G.size + b.tx] = null;
-  if (G.pick === b) G.pick = null;
+  if (b.done || b.dead) return {};
+  const o = refundOf(b, b.progress === 0 ? 1 : 0.5);
+  refund(b.civ, o);
+  removeBuilding(b);
+  return o;
+}
+
+// ---------------------------------------------------------------------
+// 地形の予定地
+// ---------------------------------------------------------------------
+// 上下左右に、歩けるマスがあるか（通れないマスで作業するとき、兵士はとなりに立つ）
+function hasOpenSide(tx, tz) {
+  for (const [dx, dz] of BORDER_DIRS) {
+    const x = tx + dx, z = tz + dz;
+    if (x >= 0 && z >= 0 && x < G.size && z < G.size && TERRAIN[G.tiles[z * G.size + x]].pass) return true;
+  }
+  return false;
+}
+// 地形の予定地を置けない理由（置けるなら null）。マウスを重ねている間は毎フレーム呼ばれるので、
+// 同じフレームの同じマスは覚えておく（山・湖は地図全体を調べるため）
+let terraMemo = { k: '', v: null }, frameNo = 0;
+function terraWhy(key, tx, tz) {
+  const k = `${frameNo}|${key}|${tx}|${tz}`;
+  if (terraMemo.k !== k) terraMemo = { k, v: terraWhyNow(key, tx, tz) };
+  return terraMemo.v;
+}
+function terraWhyNow(key, tx, tz) {
+  const i = tz * G.size + tx, t = G.tiles[i];
+  if (G.occ[i]) return 'もう建物か予定地があります';
+  if (key === 'blast' && t !== T.FOREST && t !== T.ROCK && t !== T.MOUNTAIN) return '森・岩場・山にだけ使えます';
+  if (key === 'fill' && t !== T.WATER) return '水にだけ使えます';
+  if (key === 'mountain' || key === 'water') {
+    if (t === T.MOUNTAIN || t === T.WATER) return 'もう山か水です';
+    if (nearCapital(tx, tz, 1)) return '首都のすぐそばには作れません';
+    G.tiles[i] = TOOLS[key].to;
+    const ok = allConnected();
+    G.tiles[i] = t;
+    if (!ok) return 'すべての国への道がふさがるので置けません';
+  }
+  if (!TERRAIN[t].pass && !hasOpenSide(tx, tz)) return 'となりに歩けるマスがありません（岸から順に作業しよう）';
+  return null;
+}
+// (tx,tz) のまわりで、(x,z) に一番近い歩けるマスの真ん中
+function nearestOpen(tx, tz, x, z) {
+  let best = null, bd = INF;
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+    const nx = tx + dx, nz = tz + dz;
+    if ((!dx && !dz) || nx < 0 || nz < 0 || nx >= G.size || nz >= G.size) continue;
+    if (!TERRAIN[G.tiles[nz * G.size + nx]].pass) continue;
+    const d = (wOf(nx) - x) ** 2 + (wOf(nz) - z) ** 2;
+    if (d < bd) { bd = d; best = { x: wOf(nx), z: wOf(nz) }; }
+  }
+  return best;
+}
+function finishTerra(b) {
+  const i = b.tz * G.size + b.tx, old = G.tiles[i], tool = TOOLS[b.terra], to = tool.to;
+  removeBuilding(b);
+  G.tiles[i] = to;
+  // 置いた後にまわりの地形が変わることがあるので、完成する瞬間にも道がつながっているか確かめる
+  if (!TERRAIN[to].pass && !allConnected()) {
+    G.tiles[i] = old;
+    const o = refundOf(b, 0.5);
+    refund(b.civ, o);
+    if (b.civ.isPlayer) log(`${tool.icon} すべての国への道がふさがるので、${tool.name}をやめた（${resText(o)} がもどった）`, 'warn');
+    return;
+  }
+  G.dirtyTerrain = true;
+  G.flows.clear();
+  for (const o of G.buildings) calcAdj(o);
+  if (!TERRAIN[to].pass) {
+    // 山・水になったマスにいる兵士は、となりへ押し出す。待機場所がそこだった兵士も移す
+    for (const u of G.units) {
+      if (u.dead) continue;
+      if (tOf(u.x) === b.tx && tOf(u.z) === b.tz) { const p = nearestOpen(b.tx, b.tz, u.x, u.z); if (p) { u.x = p.x; u.z = p.z; } }
+      if (tOf(u.ax) === b.tx && tOf(u.az) === b.tz) { const p = nearestOpen(b.tx, b.tz, u.ax, u.az); if (p) { u.ax = p.x; u.az = p.z; } }
+    }
+  }
+  if (b.terra === 'blast') { boom(b.x, 0.8, b.z, 0xffa040, 18, 1.4); if (b.civ.isPlayer) shake = 0.25; }
+  else boom(b.x, 0.6, b.z, TERRAIN[to].color, 8, 0.8);
 }
 function calcAdj(b) {
   if (b.type === 'lumber') b.adj = Math.min(5, adjCount(b.tx, b.tz, [T.FOREST]));
@@ -1256,10 +1398,10 @@ function countB(c) {
   for (const b of G.buildings) if (!b.dead && b.civ === c) n[b.type]++;
   return n;
 }
-function sitesOf(c) { return G.buildings.filter((b) => !b.dead && b.civ === c && (!b.done || b.reno)); }
+function sitesOf(c) { return G.buildings.filter((b) => !b.dead && b.civ === c && (!b.done || b.reno || b.demo)); }
 // 1秒あたりの生産量。新しい時代に建てた建物ほど多い
 function prodOf(b) {
-  if (!b.done) return null;
+  if (!b.done || b.demo) return null;   // 撤去中は止まる
   const m = (1 + 0.2 * b.era) * b.civ.growth * b.boost;
   switch (b.type) {
     case 'capital': return { food: 1 * m, wood: 1 * m, stone: 0.4 * m, know: 0.3 * m };
@@ -1390,9 +1532,11 @@ function pickTarget(u) {
 // 建築係の仕事。仕事中なら true を返す（その間は戦わない）
 function updateJob(u, dt) {
   const s = u.job;
-  if (s.dead || (s.done && !s.reno) || u.mode !== 'defend') { u.job = null; return false; }
+  if (s.dead || (s.done && !s.reno && !s.demo) || u.mode !== 'defend') { u.job = null; return false; }
   const dx = s.x - u.x, dz = s.z - u.z, d = Math.hypot(dx, dz);
-  if (d <= 0.85) {
+  // 山・水のマスには立てないので、となりのマスから作業する
+  const reach = s.terra && !TERRAIN[G.tiles[s.tz * G.size + s.tx]].pass ? 1.3 : 0.85;
+  if (d <= reach) {
     u.face = Math.atan2(dx, dz);
     if (u.cd <= 0) { u.cd = 0.5; u.lunge = 0.12; }
     addWork(s, dt);
@@ -1402,6 +1546,12 @@ function updateJob(u, dt) {
 }
 // 守りの兵士の中から、近い人を建築係にする（1つの建物に最大 MAX_CREW 人）
 function assignWork(c) {
+  // 通れないマスの予定地は、となりの歩けるマスがなくなると作業できないので、やめる（取り消しと同じだけ返す）
+  for (const s of sitesOf(c)) {
+    if (!s.terra || TERRAIN[G.tiles[s.tz * G.size + s.tx]].pass || hasOpenSide(s.tx, s.tz)) continue;
+    const o = cancelSite(s);
+    if (c.isPlayer) log(`${iconOf(s)} となりに歩けるマスがなくなったので、${nameOf(s)}をやめた（${resText(o)} がもどった）`, 'warn');
+  }
   const sites = sitesOf(c);
   if (!sites.length) return;
   const crew = new Map(sites.map((s) => [s, 0]));
@@ -1451,7 +1601,7 @@ function tryTeleport(u) {
   const du = Math.hypot(dest.x - u.x, dest.z - u.z);
   let best = null, bd = du - 6;
   for (const b of G.buildings) {
-    if (b.dead || !b.done || b.civ !== u.civ || b.type !== 'teleporter' || b.tpcd > 0) continue;
+    if (b.dead || !b.done || b.demo || b.civ !== u.civ || b.type !== 'teleporter' || b.tpcd > 0) continue;
     const d = Math.hypot(dest.x - b.x, dest.z - b.z);
     if (d < bd) { bd = d; best = b; }
   }
@@ -1535,7 +1685,7 @@ function updateProjectile(p, dt) {
 }
 function findShield(c, x, z) {
   for (const b of G.buildings) {
-    if (b.dead || !b.done || b.civ !== c || b.type !== 'shield' || b.shieldHp <= 0) continue;
+    if (b.dead || !b.done || b.demo || b.civ !== c || b.type !== 'shield' || b.shieldHp <= 0) continue;
     if ((b.x - x) ** 2 + (b.z - z) ** 2 <= SHIELD_R * SHIELD_R) return b;
   }
   return null;
@@ -1556,13 +1706,8 @@ function kill(t, src) {
   t.dead = true;
   scene.remove(t.mesh);
   if (t.isBuilding) {
-    removeBuildingVisuals(t);
-    G.occ[t.tz * G.size + t.tx] = null;
+    removeBuilding(t);
     boom(t.x, 0.6, t.z, t.civ.color, t.type === 'capital' ? 30 : 12, t.type === 'capital' ? 2 : 1);
-    G.dirtyTerritory = true;
-    if (t.type === 'wall') G.flows.clear();
-    if (G.pick === t) G.pick = null;
-    recalcPop(t.civ);
     for (const o of G.civs) {
       if (o.targetB !== t) continue;
       o.targetB = null;
@@ -1807,7 +1952,7 @@ function train(b, dt) {
 }
 function updateBuilding(b, dt) {
   const c = b.civ, R = c.res;
-  if (!b.done) return;
+  if (!b.done || b.demo) return;   // 撤去中は、生産・兵づくり・攻撃が止まる
   const p = prodOf(b);
   if (p) for (const k in p) R[k] += p[k] * dt;
   if (BUILD[b.type].trains) train(b, dt);
@@ -1884,11 +2029,11 @@ function syncVisuals(rdt) {
     b.grow = Math.min(1, b.grow + rdt * 2.5);
     b.flash = Math.max(0, b.flash - rdt);
     const s = easeOutBack(b.grow) * (b.flash > 0 ? 1.07 : 1);
-    // 建築中は、進み具合に合わせて下から背がのびていく
-    b.mesh.scale.set(s, b.done ? s : s * (0.08 + 0.92 * b.progress), s);
+    // 建築中は、進み具合に合わせて下から背がのびていく。撤去中は低くなっていく
+    b.mesh.scale.set(s, b.done ? s * (1 - 0.8 * b.demoProg) : s * (0.08 + 0.92 * b.progress), s);
     if (b.head) b.head.rotation.y += (((b.aim - b.head.rotation.y + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI) * Math.min(1, rdt * 10);
-    setBar(b.bar, b.done && b.hp < b.maxHp - 0.5, b.hp / b.maxHp);
-    setBar(b.wbar, !b.done || b.reno, b.done ? b.renoProg : b.progress);
+    setBar(b.bar, (b.done || b.terra) && b.hp < b.maxHp - 0.5, b.hp / b.maxHp);
+    setBar(b.wbar, !b.done || b.reno || b.demo, !b.done ? b.progress : b.demo ? b.demoProg : b.renoProg);
     b.mesh.traverse((o) => {
       if (o.userData.float) o.position.y = (o.userData.baseY ??= o.position.y) + Math.sin(now * 2) * 0.06;
       if (o.userData.spin) o.rotation.y += rdt;
@@ -2031,7 +2176,7 @@ function refreshHud() {
     btn.classList.toggle('locked', !!locked);
     btn.classList.toggle('lack', !locked && !canAfford(P, cost));
     btn.classList.toggle('on', !!G.sel && G.sel.key === key);
-    btn.querySelector('.cs').innerHTML = locked ? `🔒 ${ERAS[def.era].name}` : costText(P, cost);
+    btn.querySelector('.cs').innerHTML = locked ? `🔒 ${ERAS[def.era].name}` : key === 'demolish' ? '資源の半分がもどる' : costText(P, cost);
   }
   for (const c of G.civs) {
     if (!c.row) continue;
@@ -2104,6 +2249,11 @@ const pickRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.68, 32).rotateX(-
 pickRing.renderOrder = 5;
 scene.add(targetMarker, pickRing);
 targetMarker.visible = pickRing.visible = false;
+// 撤去を選んでいるとき、指している建物にかぶせる赤い箱
+const demoMark = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0.35, depthWrite: false }));
+demoMark.renderOrder = 6; demoMark.visible = false;
+scene.add(demoMark);
+const _box = new THREE.Box3(), _size = new THREE.Vector3(), _ctr = new THREE.Vector3();
 
 function pickTile(ev) {
   if (!G) return null;
@@ -2124,23 +2274,30 @@ function paintAt(h) {
     if (G.tiles[i] !== brush) { G.tiles[i] = brush; G.dirtyTerrain = true; }
   }
 }
+// 地形の道具：その場で変えずに「地形の予定地」を置く。守りの兵士が作業に行く
 function useTool(key, h) {
-  const P = G.player, i = h.tz * G.size + h.tx, t = G.tiles[i], cost = costOf(P, key);
+  if (key === 'demolish') { demolishAt(h); return; }
+  const P = G.player, cost = costOf(P, key);
   if (!canAfford(P, cost)) { log('資源が足りません', 'warn'); return; }
-  if (key === 'blast') {
-    if (t !== T.FOREST && t !== T.ROCK && t !== T.MOUNTAIN) { log('森・岩場・山にだけ使えます', 'warn'); return; }
-    pay(P, cost); G.tiles[i] = T.GRASS;
-    boom(wOf(h.tx), 0.8, wOf(h.tz), 0xffa040, 18, 1.4); shake = 0.25;
-  } else {
-    if (t === T.MOUNTAIN || t === T.WATER) { log('もう山か水です', 'warn'); return; }
-    if (G.occ[i] || nearCapital(h.tx, h.tz, 1)) { log('建物の上には作れません', 'warn'); return; }
-    const old = t;
-    G.tiles[i] = key === 'mountain' ? T.MOUNTAIN : T.WATER;
-    if (!allConnected()) { G.tiles[i] = old; log('すべての国への道がふさがるので置けません', 'warn'); return; }
-    pay(P, cost);
-    boom(wOf(h.tx), 0.6, wOf(h.tz), key === 'mountain' ? 0x8f8373 : 0x3f8fd4, 8, 0.8);
-  }
-  G.dirtyTerrain = true;
+  const why = terraWhyNow(key, h.tx, h.tz);
+  if (why) { log(why, 'warn'); return; }
+  pay(P, cost);
+  placeBuilding(P, 'terra', h.tx, h.tz, false, cost, key);
+}
+// 🔨撤去：完成した建物なら撤去を始める／撤去中ならやめる／予定地なら消す
+function demolishAt(h) {
+  const P = G.player, b = G.occ[h.tz * G.size + h.tx];
+  if (!b || b.civ !== P) { log('自分の建物をえらんでください', 'warn'); return; }
+  if (b.type === 'capital') { log('首都は撤去できません', 'warn'); return; }
+  if (!b.done) { cancelAndLog(b); return; }
+  if (b.demo) { stopDemolish(b); log(`↩ ${nameOf(b)}の撤去をやめた`); return; }
+  if (b.reno) { log('改修中は撤去できません', 'warn'); return; }
+  startDemolish(b);
+  log(`🔨 ${nameOf(b)}の撤去を始めた（守りの兵士が作業に行く）`);
+}
+function cancelAndLog(b) {
+  const o = cancelSite(b);
+  log(`🚫 ${nameOf(b)}をやめた（${resText(o)} がもどった）`);
 }
 // タップ（クリック）は「離したとき」に決める。2本指で拡大・縮小したときや、
 // 指を動かしてカメラを回したときに、建物が建ってしまわないようにするため
@@ -2248,7 +2405,8 @@ $('info').addEventListener('pointerdown', (ev) => {
   const act = ev.target.closest('[data-act]')?.dataset.act, b = G && G.pick;
   if (!act || !b) return;
   if (act === 'reno') { if (!startReno(b)) log('資源が足りません', 'warn'); }
-  if (act === 'cancel') { cancelSite(b); log('🚫 建築をやめた（資源の半分がもどった）'); }
+  if (act === 'cancel') cancelAndLog(b);
+  if (act === 'demo' || act === 'undemo') demolishAt(b);
   if (act === 'pause') b.paused = !b.paused;
   refreshHud();
 });
@@ -2283,7 +2441,7 @@ function focusCamera(x, z, dist) {
   controls.update();
 }
 function updateHover() {
-  hoverMesh.visible = rangeRing.visible = false;
+  hoverMesh.visible = rangeRing.visible = demoMark.visible = false;
   if (!G || !hover || G.phase === 'over' || (G.phase === 'play' && !G.sel)) { updateInfo(); return; }
   const i = hover.tz * G.size + hover.tx, h = TERRAIN[G.tiles[i]].h, x = wOf(hover.tx), z = wOf(hover.tz);
   hoverMesh.visible = true;
@@ -2296,8 +2454,16 @@ function updateHover() {
     const { kind, key } = G.sel;
     let ok = true;
     if (kind === 'build') ok = !canPlace(G.player, key, hover.tx, hover.tz) && canAfford(G.player, costOf(G.player, key));
-    else ok = canAfford(G.player, costOf(G.player, key));
-    hoverMesh.material.color.setHex(ok ? 0x46e26a : 0xff5a4a);
+    else if (key === 'demolish') {
+      // 撤去できる自分の建物を指しているときは、建物ごと赤く光らせる
+      const b = G.occ[i];
+      ok = !!b && b.civ === G.player && b.type !== 'capital' && !b.reno;
+      if (ok) {
+        _box.setFromObject(b.mesh).getSize(_size); _box.getCenter(_ctr);
+        demoMark.visible = true; demoMark.position.copy(_ctr); demoMark.scale.copy(_size).multiplyScalar(1.08);
+      }
+    } else ok = canAfford(G.player, costOf(G.player, key)) && !terraWhy(key, hover.tx, hover.tz);
+    hoverMesh.material.color.setHex(key === 'demolish' ? (ok ? 0xff5a4a : 0x888888) : ok ? 0x46e26a : 0xff5a4a);
     const rr = key === 'turret' ? ERAS[G.player.era].turret.range : key === 'shield' ? SHIELD_R : 0;
     if (rr) { rangeRing.visible = true; rangeRing.position.set(x, 0.4, z); rangeRing.scale.setScalar(rr); }
   }
@@ -2314,19 +2480,23 @@ function updateInfo() {
   if (G.sel) {
     const def = BUILD[G.sel.key] || TOOLS[G.sel.key];
     html += `<b>${def.icon} ${def.name}</b><br><span style="color:var(--muted)">${def.desc}</span><br>`;
-    if (def.time) html += `🔨 建てる時間：兵士1人で${def.time}秒（2人で半分）<br>`;
+    if (def.time) html += `🔨 ${G.sel.kind === 'tool' ? '作業の' : '建てる'}時間：兵士1人で${def.time}秒（2人で半分）<br>`;
     if (def.trains) { const s = unitStats(def.trains, P.era); html += `作る兵：${s.name}（1人 ${costText(P, s.cost)}・${s.time}秒）<br>`; }
     if (G.sel.key === 'turret') { const tr = ERAS[P.era].turret; html += `いまの形：${tr.name}（射程 ${tr.range}）<br>`; }
     if (hover && G.sel.kind === 'build') { const why = canPlace(P, G.sel.key, hover.tx, hover.tz); if (why) html += `<span style="color:var(--bad)">${why}</span><br>`; }
-    html += '<span style="color:var(--muted)">左クリックで置く ／ Escでやめる</span><hr style="border-color:var(--line)">';
+    if (hover && G.sel.kind === 'tool' && G.sel.key !== 'demolish') { const why = terraWhy(G.sel.key, hover.tx, hover.tz); if (why) html += `<span style="color:var(--bad)">${why}</span><br>`; }
+    html += G.sel.key === 'demolish'
+      ? '<span style="color:var(--muted)">自分の建物をクリック：撤去を始める／もう一度でやめる ／ Escでやめる</span><hr style="border-color:var(--line)">'
+      : '<span style="color:var(--muted)">左クリックで置く ／ Escでやめる</span><hr style="border-color:var(--line)">';
   }
   if (hover) {
     const i = hover.tz * G.size + hover.tx, o = G.owner[i], b = G.occ[i];
     html += `${TERRAIN[G.tiles[i]].icon} ${TERRAIN[G.tiles[i]].name}`;
     if (o >= 0) html += ` ・ ${G.civs[o].name}の領土`;
     if (b && b !== G.pick) {
-      html += `<br><b>${BUILD[b.type].icon} ${nameOf(b)}</b>（${b.civ.name}・${ERAS[b.era].name}）<br>HP ${Math.ceil(b.hp)} / ${Math.ceil(b.maxHp)}`;
-      if (!b.done) html += ` ・ 建築中 ${Math.floor(b.progress * 100)}%`;
+      html += `<br><b>${iconOf(b)} ${nameOf(b)}</b>（${b.civ.name}・${ERAS[b.era].name}）<br>HP ${Math.ceil(b.hp)} / ${Math.ceil(b.maxHp)}`;
+      if (!b.done) html += ` ・ ${b.terra ? '作業中' : '建築中'} ${Math.floor(b.progress * 100)}%`;
+      if (b.demo) html += ` ・ 撤去中 ${Math.floor(b.demoProg * 100)}%`;
       if (b.type === 'shield' && b.done) html += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
       if (!G.sel) html += `<br><span style="color:var(--muted)">${b.civ === P ? 'クリックでくわしく見る' : 'クリックで攻撃目標にする'}</span>`;
     }
@@ -2336,12 +2506,20 @@ function updateInfo() {
 // えらんだ自分の建物のくわしい情報と、ボタン
 function pickHtml(b) {
   const P = G.player, def = BUILD[b.type];
-  let h = `<b>${def.icon} ${nameOf(b)}</b>（${ERAS[b.era].name}のもの）<br>HP ${Math.ceil(b.hp)} / ${Math.ceil(b.maxHp)}`;
+  let h = `<b>${iconOf(b)} ${nameOf(b)}</b>${b.terra ? '' : `（${ERAS[b.era].name}のもの）`}<br>HP ${Math.ceil(b.hp)} / ${Math.ceil(b.maxHp)}`;
   const crew = G.units.filter((u) => u.job === b).length;
   if (!b.done) {
-    h += `<br>🔨 建築中 ${Math.floor(b.progress * 100)}%（作業中の兵士 ${crew}人）`;
-    if (!crew) h += '<br><span style="color:var(--bad)">建てに来る兵士がいません（守りの兵士が必要）</span>';
-    h += '<br><button data-act="cancel">🚫 建築をやめる（半分もどる）</button>';
+    h += `<br>🔨 ${b.terra ? '作業中' : '建築中'} ${Math.floor(b.progress * 100)}%（作業中の兵士 ${crew}人）`;
+    if (!crew) h += '<br><span style="color:var(--bad)">作業に来る兵士がいません（守りの兵士が必要）</span>';
+    const o = refundOf(b, b.progress === 0 ? 1 : 0.5);
+    h += `<br><button data-act="cancel">🚫 ${b.terra ? 'やめる' : '建築をやめる'}</button> <span class="cs">${resText(o)} がもどる</span>`;
+    return h;
+  }
+  if (b.demo) {
+    h += `<br>🔨 撤去中 ${Math.floor(b.demoProg * 100)}%（作業中の兵士 ${crew}人）・止まっています`;
+    if (!crew) h += '<br><span style="color:var(--bad)">作業に来る兵士がいません（守りの兵士が必要）</span>';
+    h += `<br>終わると ${resText(refundOf(b, 0.5))} がもどる`;
+    h += '<br><button data-act="undemo">↩ 撤去をやめる</button>';
     return h;
   }
   if (b.type === 'shield') h += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
@@ -2358,6 +2536,7 @@ function pickHtml(b) {
   else if (canRenovate(b)) {
     h += `<br><button data-act="reno">🔨 改修 → ${ERAS[P.era].name}</button> <span class="cs">${costText(P, renoCost(P, b.type))}</span>`;
   } else if (b.type !== 'capital') h += '<br><span style="color:var(--muted)">今の時代のものです</span>';
+  if (canDemolish(b)) h += `<br><button data-act="demo">🔨 撤去（半分もどる）</button> <span class="cs">${resText(refundOf(b, 0.5))}</span>`;
   return h;
 }
 
@@ -2481,6 +2660,7 @@ if (new URLSearchParams(location.search).has('debug')) {
   window.ces = {
     get G() { return G; }, camera, controls, advanceEra, placeBuilding, spawnUnit, findSpot, aiThink, orderAttack, setRatio,
     startReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
+    T, TOOLS, useTool, demolishAt, startDemolish, stopDemolish, cancelSite, terraWhy, allConnected,
     // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
     step(sec) { for (let t = 0; t < sec && G.phase === 'play'; t += 0.05) update(0.05); },
   };
@@ -2492,6 +2672,7 @@ if (new URLSearchParams(location.search).has('debug')) {
 let last = performance.now(), hudT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  frameNo++;
   const rdt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (G) {
