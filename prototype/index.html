@@ -92,6 +92,10 @@
   #cmd .ratio { display: flex; align-items: center; gap: 6px; font-size: 11px; }
   #cmd .ratio input { flex: 1; min-width: 0; }
   #cmd-ratio-v { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  #cmd .go { display: flex; gap: 6px; margin-top: 4px; }
+  #cmd .go button { margin: 0; padding: 6px 4px; width: auto; flex: 1; white-space: nowrap; }
+  #cmd .go #cmd-sortie { flex: 1.6; }
+  #cmd .go button:disabled { opacity: 0.45; cursor: default; }
   #cmd-target { font-size: 12px; margin-top: 4px; color: var(--accent); }
   #cmd-state { font-size: 12px; color: var(--muted); line-height: 1.5; }
   #topbar .rate { font-size: 11px; margin-left: 2px; }
@@ -226,6 +230,7 @@
       <div class="ratio"><span>🛡守り</span><input type="range" id="cmd-ratio" min="0" max="100" step="10" value="0"><span>⚔攻撃</span></div>
       <div id="cmd-ratio-v"></div>
       <div id="cmd-target"></div>
+      <div class="go"><button id="cmd-sortie" class="primary" title="集合中の兵が全員、攻撃目標へ出る（3秒準備してから動く）">⚔ 出撃</button><button id="cmd-retreat" title="攻撃中の兵が全員、戦わずに集合所へもどる">🏳 退避</button></div>
       <button id="cmd-def">🛡 全員もどれ（攻撃 0%）</button>
       <div id="cmd-state"></div>
     </div>
@@ -349,6 +354,7 @@ const BUILD = {
   lab:      { name: '研究所', icon: '🔭', cost: { wood: 60, stone: 30 }, hp: 100, time: 14, desc: '知識 +1/秒。時代を進めるのに必要' },
   barracks: { name: '兵舎', icon: '⚔', cost: { wood: 70, stone: 20 }, hp: 160, time: 15, trains: 'inf', desc: '歩兵を1人ずつ作る（食料を使う）。建てた時代の歩兵になる' },
   turret:   { name: 'タレット', icon: '🗼', cost: { wood: 80, stone: 120 }, hp: 220, time: 22, scale: true, desc: '近づいた敵をうつ。建てた時代の形のまま（改修で新しくなる）' },
+  rally:    { name: '集合所', icon: '🚩', cost: { wood: 60, stone: 20 }, hp: 200, time: 12, desc: '攻撃に回した兵がここに集まり、出撃を待つ。近くにいると回復する。攻撃目標に一番近い集合所を使う' },
   range:    { name: '射撃場', icon: '🏹', era: 1, cost: { wood: 90, stone: 30 }, hp: 140, time: 15, trains: 'archer', desc: '弓兵を作る。遠くからうつ' },
   wall:     { name: '壁', icon: '🧱', era: 1, cost: { stone: 12 }, hp: 260, time: 4, scale: true, noTerr: true, desc: '敵は通れない（壊すか回り道）。味方は通れる。領土は広がらない' },
   stable:   { name: '厩舎', icon: '🐎', era: 2, cost: { wood: 140, food: 60 }, hp: 180, time: 18, trains: 'cavalry', desc: '騎兵を作る。速くて強いが、よく食べる' },
@@ -770,6 +776,17 @@ function makeBuilding(type, E, color, terra) {
       ball(g, color, 0.3, 0, 0.5, 0, null, GEO.ball1).scale.y = 0.18;
       break;
     }
+    case 'rally': {
+      // 集合所：大きな旗と、まわりの柵（柵の色が時代で変わる）
+      for (let k = 0; k < 8; k++) {
+        const a = k / 8 * Math.PI * 2;
+        add(g, GEO.box, wall, 0.07, 0.3, 0.07, Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4);
+      }
+      add(g, GEO.torus, wall, 0.4, 0.4, 0.4, 0, 0.02).rotation.x = Math.PI / 2;
+      add(g, GEO.cyl6, 0x5a4630, 0.04, 1.4, 0.04);
+      add(g, GEO.box, color, 0.5, 0.3, 0.02, 0.25, 1.05);
+      break;
+    }
     case 'teleporter': {
       add(g, GEO.cyl8, 0xcfd8df, 0.45, 0.1, 0.45);
       for (const x of [-0.4, 0.4]) add(g, GEO.box, wall, 0.1, 0.9, 0.1, x, 0.1, 0);
@@ -896,6 +913,7 @@ function newWorld(cfg) {
       ratio: 0, attackTarget: null, targetB: null, upkeep: 0, starve: 0, freeT: 0, workT: 0, balT: 0,
       pers: e ? PERSONALITY[e.pers] : null, growth: e ? e.growth : 1,
       waveTimer: 0, thinkTimer: 1 + Math.random() * 2, unitCount: 0, popCap: 3, threats: [], kills: 0,
+      rallyB: null, rallyT: 0, wave: null,
       cx: Math.round(S / 2 - 0.5 + Math.cos(ang) * r), cz: Math.round(S / 2 - 0.5 + Math.sin(ang) * r),
     });
   }
@@ -919,6 +937,7 @@ function clearWorld() {
     terrainGroup = null; borderMesh = null;
   }
   if (multiRing) multiRing.count = 0;
+  rallyLabel.visible = false;
   multiMode = false;
   closeConfirm();
   G = null;
@@ -1410,6 +1429,7 @@ function finishTerra(b) {
       if (u.dead) continue;
       if (tOf(u.x) === b.tx && tOf(u.z) === b.tz) { const p = nearestOpen(b.tx, b.tz, u.x, u.z); if (p) { u.x = p.x; u.z = p.z; } }
       if (tOf(u.ax) === b.tx && tOf(u.az) === b.tz) { const p = nearestOpen(b.tx, b.tz, u.ax, u.az); if (p) { u.ax = p.x; u.az = p.z; } }
+      if (tOf(u.sx) === b.tx && tOf(u.sz) === b.tz) u.slotFor = null;   // 集合所の並ぶ場所を決め直す
     }
   }
   if (b.terra === 'blast') { boom(b.x, 0.8, b.z, 0xffa040, 18, 1.4); if (b.civ.isPlayer) shake = 0.25; }
@@ -1464,6 +1484,7 @@ function spawnUnit(c, x, z, kind = 'inf', era = c.era) {
     mode: 'defend', targetCiv: null, targetB: null, target: null, job: null,
     think: Math.random() * 0.3, face: 0, jx: (Math.random() - 0.5) * 0.5, jz: (Math.random() - 0.5) * 0.5,
     phase: Math.random() * 6, lunge: 0, flash: 0, dead: false, moving: false, ax: 0, az: 0,
+    readyAt: 0, march: 0, slotFor: null, sx: 0, sz: 0,
   };
   // 首都のまわりの待機場所
   for (let k = 0; k < 12; k++) {
@@ -1491,7 +1512,7 @@ function passableFor(civ, x, z) {
 function moveDir(u, dx, dz, dt) {
   const len = Math.hypot(dx, dz);
   if (len < 1e-4) return;
-  const s = Math.min(len, u.speed * dt);
+  const s = Math.min(len, (u.march || u.speed) * dt);   // 出撃した兵は、群れの速さ（一番遅い兵）で進む
   const nx = u.x + dx / len * s, nz = u.z + dz / len * s;
   const stuck = !passableFor(u.civ, u.x, u.z);
   if (stuck || passableFor(u.civ, nx, nz)) { u.x = nx; u.z = nz; }
@@ -1604,29 +1625,108 @@ function assignWork(c) {
     }
   }
 }
-// 攻撃の割合に合わせて、兵士を「攻撃」と「守り」に分ける
+// 兵士の状態：defend（守り）／muster（集合中）／attack（攻撃中）。状態が変わるときは、前の状態の中身を消す
+function setMode(u, mode) {
+  u.mode = mode; u.target = null; u.march = 0; u.readyAt = 0;
+  if (mode !== 'defend') u.job = null;
+  if (mode !== 'attack') { u.targetCiv = null; u.targetB = null; }
+}
+// 攻撃の割合に合わせて、兵士を「集合中＋攻撃中」と「守り」に分ける
 function rebalance(c) {
   if (c.attackTarget && !c.attackTarget.alive) { c.attackTarget = null; c.targetB = null; }
   if (c.targetB && c.targetB.dead) c.targetB = null;
-  const tgt = c.attackTarget;
   const mine = G.units.filter((u) => !u.dead && u.civ === c);
-  const want = tgt ? Math.round(mine.length * c.ratio) : 0;
-  const atk = mine.filter((u) => u.mode === 'attack');
-  for (const u of atk) { u.targetCiv = tgt; u.targetB = c.targetB; }
-  if (atk.length < want) {
+  const want = Math.round(mine.length * c.ratio);   // 攻撃目標がなくても集めておく
+  const mus = mine.filter((u) => u.mode === 'muster'), atk = mine.filter((u) => u.mode === 'attack');
+  if (c.attackTarget) for (const u of atk) { u.targetCiv = c.attackTarget; u.targetB = c.targetB; }
+  const n = mus.length + atk.length;
+  if (n < want) {
     // 建築係は最後に回す
     const cand = mine.filter((u) => u.mode === 'defend').sort((a, b) => (a.job ? 1 : 0) - (b.job ? 1 : 0));
-    for (let k = 0; k < want - atk.length && k < cand.length; k++) {
-      Object.assign(cand[k], { mode: 'attack', job: null, targetCiv: tgt, targetB: c.targetB, target: null });
-    }
-  } else if (atk.length > want) {
-    // 首都に近い（まだ出発したばかりの）兵士からもどす
+    for (let k = 0; k < want - n && k < cand.length; k++) setMode(cand[k], 'muster');
+  } else if (n > want) {
+    // まず集合中の兵を守りにもどす。それでも多ければ、首都に近い（まだ出発したばかりの）攻撃中の兵からもどす
+    let extra = n - want;
+    for (const u of mus) { if (!extra) break; setMode(u, 'defend'); extra--; }
     const cap = c.capital;
     atk.sort((a, b) => ((a.x - cap.x) ** 2 + (a.z - cap.z) ** 2) - ((b.x - cap.x) ** 2 + (b.z - cap.z) ** 2));
-    for (let k = 0; k < atk.length - want; k++) {
-      Object.assign(atk[k], { mode: 'defend', targetCiv: null, targetB: null, target: null });
-    }
+    for (let k = 0; k < extra && k < atk.length; k++) setMode(atk[k], 'defend');
   }
+}
+// 集合場所：攻撃目標に一番近い、完成している自分の集合所（目標がなければ首都に一番近いもの）。なければ首都
+// 毎回さがすと重いので、0.5秒ごとに決め直す（集合所が壊れたらすぐ決め直す）
+function rallyOf(c) {
+  if (!c.rallyB || c.rallyB.dead || G.time >= c.rallyT) { c.rallyB = findRally(c); c.rallyT = G.time + 0.5; }
+  return c.rallyB;
+}
+function findRally(c) {
+  const t = c.attackTarget && c.attackTarget.alive ? (c.targetB && !c.targetB.dead ? c.targetB : c.attackTarget.capital) : c.capital;
+  let best = c.capital, bd = INF;
+  for (const b of G.buildings) {
+    if (b.dead || !b.done || b.demo || b.civ !== c || b.type !== 'rally') continue;
+    const d = (b.x - t.x) ** 2 + (b.z - t.z) ** 2;
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best;
+}
+const RALLY_HEAL_R = 3;      // 集合所のこの半径の中にいる集合中の兵は回復する（マス）
+const RALLY_HEAL = 0.03;     // 1秒に最大HPの何割回復するか
+const SORTIE_PREP = 3;       // 出撃を押してから動き出す（攻撃できるようになる）までの秒数
+// 集合所のまわりで、兵ごとに並ぶ場所を決める（重ならないように、角度と距離をばらけさせる）。
+// 集合所からまっすぐ歩いて行ける場所だけにする（山・水ごしの場所だと、まっすぐ歩いて引っかかるため）
+function pickSlot(u, R) {
+  u.slotFor = R; u.sx = R.x; u.sz = R.z;
+  for (let k = 0; k < 12; k++) {
+    const a = Math.random() * Math.PI * 2, r = 1.2 + Math.random() * 1.3;
+    let clear = true;
+    for (let s = 0.25; s <= r && clear; s += 0.25) clear = passable(R.x + Math.cos(a) * s, R.z + Math.sin(a) * s);
+    if (clear && passable(R.x + Math.cos(a) * r, R.z + Math.sin(a) * r)) { u.sx = R.x + Math.cos(a) * r; u.sz = R.z + Math.sin(a) * r; return; }
+  }
+}
+// 集合中：敵を探さず、作業もせず、並ぶ場所へ歩くだけ。集合所の近くにいれば回復する
+function updateMuster(u, dt) {
+  const R = rallyOf(u.civ);
+  if (u.slotFor !== R) pickSlot(u, R);
+  // 行く手を敵の壁がふさいでいたら（steerFlow が目標にする）、その壁だけは壊して進む。兵とは戦わない
+  const w = u.target;
+  if (w && !w.dead && w.type === 'wall') {
+    const d = Math.hypot(w.x - u.x, w.z - u.z);
+    if (d <= u.range + 0.55) { u.face = Math.atan2(w.x - u.x, w.z - u.z); if (u.cd <= 0) unitAttack(u, w); }
+    else moveDir(u, w.x - u.x, w.z - u.z, dt);
+    return;
+  }
+  u.target = null;
+  // 集合所の近くまでは道のりの地図で行き、そこから並ぶ場所へまっすぐ歩く
+  const dR = Math.hypot(R.x - u.x, R.z - u.z), d = Math.hypot(u.sx - u.x, u.sz - u.z);
+  if (dR > RALLY_HEAL_R && d > 0.3) goTo(u, R, dt);
+  else if (d > 0.3) moveDir(u, u.sx - u.x, u.sz - u.z, dt);
+  if (dR <= RALLY_HEAL_R) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * RALLY_HEAL * dt);
+}
+// 出撃：list の兵をまとめて攻撃に出す。SORTIE_PREP 秒その場で準備してから、一番遅い兵の速さでそろって進む
+function sortie(c, tgt, tb, list) {
+  const march = Math.min(...list.map((u) => u.speed));
+  for (const u of list) {
+    setMode(u, 'attack');
+    Object.assign(u, { targetCiv: tgt, targetB: tb, readyAt: G.time + SORTIE_PREP, march });
+  }
+}
+function musterOf(c) { return G.units.filter((u) => !u.dead && u.civ === c && u.mode === 'muster'); }
+// ⚔出撃ボタン：集合中の兵が全員（集合所へ向かっている途中の兵も）出る
+function playerSortie() {
+  const P = G.player, list = musterOf(P);
+  if (!P.attackTarget || !P.attackTarget.alive) { log('先に攻撃目標を決めてください（右の「狙う」か、敵の建物をクリック）', 'warn'); return 0; }
+  if (!list.length) { log('集合中の兵がいません（攻撃の割合を上げると集まります）', 'warn'); return 0; }
+  sortie(P, P.attackTarget, P.targetB, list);
+  log(`⚔ 出撃！ ${list.length}人が${SORTIE_PREP}秒後に${P.attackTarget.name}の${P.targetB ? nameOf(P.targetB) : '首都'}へ向かう`, 'good');
+  return list.length;
+}
+// 🏳退避ボタン：攻撃中の兵が全員、集合中にもどる（もどる途中は戦わない）
+function playerRetreat() {
+  const list = G.units.filter((u) => !u.dead && u.civ === G.player && u.mode === 'attack');
+  if (!list.length) { log('攻撃中の兵がいません', 'warn'); return 0; }
+  for (const u of list) setMode(u, 'muster');
+  log(`🏳 退避！ ${list.length}人が集合所へもどる`);
+  return list.length;
 }
 // テレポーターがあれば、目標に近いほうへワープする
 function tryTeleport(u) {
@@ -1646,8 +1746,11 @@ function tryTeleport(u) {
 }
 function updateUnit(u, dt) {
   u.cd -= dt; u.think -= dt; u.moving = false;
-  if (u.mode === 'attack' && (!u.targetCiv || !u.targetCiv.alive)) { u.mode = 'defend'; u.targetCiv = null; u.targetB = null; }
+  // 目標の国がほろびたら、プレイヤーの兵は集合所にもどって次の出撃を待つ（AI の兵は守りにもどる）
+  if (u.mode === 'attack' && (!u.targetCiv || !u.targetCiv.alive)) setMode(u, u.civ.isPlayer && u.civ.ratio > 0 ? 'muster' : 'defend');
   if (u.targetB && u.targetB.dead) u.targetB = null;
+  if (u.mode === 'muster') { updateMuster(u, dt); return; }
+  if (u.mode === 'attack' && G.time < u.readyAt) return;   // 出撃の準備中：止まったまま、敵も探さない
   if (u.job && updateJob(u, dt)) return;
   if (u.think <= 0) {
     u.think = 0.3 + Math.random() * 0.2;
@@ -1656,9 +1759,11 @@ function updateUnit(u, dt) {
   }
   const t = u.target;
   if (t && !t.dead) {
+    if (!t.isBuilding) u.march = 0;   // 敵の兵とぶつかったら、群れの速さをやめて各自で戦う
     const dx = t.x - u.x, dz = t.z - u.z, d = Math.hypot(dx, dz);
     const reach = u.range + (t.isBuilding ? (t.type === 'capital' ? 1.0 : 0.55) : 0.25);
     if (d <= reach) {
+      u.march = 0;
       u.face = Math.atan2(dx, dz);
       if (u.cd <= 0) unitAttack(u, t);
       return;
@@ -1870,7 +1975,9 @@ function aiThink(c) {
     return;
   }
 }
+// 攻撃の波：出す兵をまず集合させる。出撃は aiMuster が決める
 function aiWave(c) {
+  if (c.wave) return;
   const home = G.units.filter((u) => !u.dead && u.civ === c && u.mode === 'defend' && !u.job);
   if (home.length < 3) return;
   const cands = G.civs.filter((o) => o !== c && o.alive);
@@ -1881,12 +1988,34 @@ function aiWave(c) {
   const target = cands[k];
   // 1回の攻撃の人数は、時間と時代でだんだん増える
   const n = Math.min(Math.ceil(home.length * 0.7), 3 + c.era * 2 + Math.floor(G.time / 90) * 2);
-  for (let i = 0; i < n; i++) { home[i].mode = 'attack'; home[i].targetCiv = target; home[i].target = null; }
-  if (target.isPlayer) {
+  for (let i = 0; i < n; i++) setMode(home[i], 'muster');
+  c.wave = { target, until: G.time + AI_MUSTER_WAIT };
+}
+const AI_MUSTER_WAIT = 20;   // AI は、全員そろうか、この秒数たったら出撃する
+const AI_DANGER_R = 9;       // 首都からこの距離に敵がいたら、集合をやめて守りにもどす
+// AI の集合：全員が集合場所（首都）にそろうか、時間が来たら出撃する。AI は退避しない
+function aiMuster(c) {
+  const w = c.wave;
+  if (!w) return;
+  const list = musterOf(c), R = rallyOf(c);
+  // 集合中の兵は戦わないので、首都が攻められたら、すぐ守りにもどす
+  const cap = c.capital;
+  const danger = c.threats.some((t) => !t.dead && (t.x - cap.x) ** 2 + (t.z - cap.z) ** 2 <= AI_DANGER_R ** 2);
+  if (danger || !w.target.alive || !list.length) {
+    for (const u of list) setMode(u, 'defend');
+    c.wave = null;
+    return;
+  }
+  const ready = list.every((u) => (u.x - R.x) ** 2 + (u.z - R.z) ** 2 <= 3.5 ** 2);
+  if (!ready && G.time < w.until) return;
+  c.wave = null;
+  sortie(c, w.target, null, list);
+  const n = list.length;
+  if (w.target.isPlayer) {
     log(`⚔ ${c.name}の軍（${n}人）が攻めてきた！`, 'warn');
     flashAlert();
   } else {
-    log(`⚔ ${c.name}が${target.name}に攻めこんだ（${n}人）`);
+    log(`⚔ ${c.name}が${w.target.name}に攻めこんだ（${n}人）`);
   }
 }
 
@@ -1898,7 +2027,7 @@ function update(dt) {
   const S = G.size;
   // 兵士をマスごとに登録（近くの敵さがしを速くするため）
   for (const arr of G.unitGrid) arr.length = 0;
-  for (const c of G.civs) { c.unitCount = 0; c.upkeep = 0; c.threats.length = 0; }
+  for (const c of G.civs) { c.unitCount = 0; c.musterN = 0; c.upkeep = 0; c.threats.length = 0; }
   for (const u of G.units) {
     if (u.dead) continue;
     const tx = clamp(tOf(u.x), 0, S - 1), tz = clamp(tOf(u.z), 0, S - 1), i = tz * S + tx;
@@ -1910,6 +2039,7 @@ function update(dt) {
     }
     cell.push(u);
     u.civ.unitCount++;
+    if (u.mode === 'muster') u.civ.musterN++;   // 画面の表示用（集合中の人数）
     u.civ.upkeep += u.upkeep;
     const o = G.owner[i];
     if (o >= 0 && o !== u.civ.id) G.civs[o].threats.push(u);
@@ -1920,11 +2050,9 @@ function update(dt) {
     feed(c, dt);
     c.workT -= dt;
     if (c.workT <= 0) { c.workT = 0.5; assignWork(c); }
-    if (c.isPlayer) {
-      c.balT -= dt;
-      if (c.balT <= 0) { c.balT = 0.5; rebalance(c); }
-      continue;
-    }
+    c.balT -= dt;
+    if (c.balT <= 0) { c.balT = 0.5; if (c.isPlayer) rebalance(c); else aiMuster(c); }
+    if (c.isPlayer) continue;
     c.thinkTimer -= dt;
     if (c.thinkTimer <= 0) { c.thinkTimer = 4 / c.growth; aiThink(c); }
     c.waveTimer -= dt;
@@ -2086,6 +2214,13 @@ function syncVisuals(rdt) {
     targetMarker.position.set(dest.x, h + Math.sin(now * 4) * 0.15, dest.z);
     targetMarker.rotation.y += rdt * 2;
   }
+  // 集合所の札：兵が集まっているか、集合所を建てているときに出す
+  const R = G.phase === 'play' && P.alive ? rallyOf(P) : null, nMus = P.musterN || 0;
+  rallyLabel.visible = !!R && (nMus > 0 || R.type === 'rally');
+  if (rallyLabel.visible) {
+    drawRallyLabel(nMus);
+    rallyLabel.position.set(R.x, R.type === 'capital' ? 5.2 : 2.5, R.z);
+  }
   pickRing.visible = !!G.pick && !G.pick.dead;
   if (pickRing.visible) pickRing.position.set(G.pick.x, 0.42, G.pick.z);
   syncMultiRings();
@@ -2168,7 +2303,10 @@ function currentHint() {
   if (P.unitCount >= P.popCap) return '🏠 兵士がいっぱい。家を建てて上限をふやそう';
   if (hasOld(P)) return '🔨 古い建物をクリックして「改修」すると、今の時代の強さになります';
   if (P.era >= 1 && !n.wall) return '🧱 壁で敵の通り道をふさごう。回り道が長いと、敵は壁を壊しにくる';
-  if (P.ratio === 0) return '⚔ 攻撃の割合を上げてから、敵の建物をクリックすると、そこを狙います';
+  if (P.ratio === 0) return '⚔ 攻撃の割合を上げると、兵が集合所（なければ首都）に集まります。敵の建物をクリックすると、そこを狙います';
+  const nMus = P.musterN || 0;
+  if (nMus && P.attackTarget) return `⚔ ${nMus}人が集合中。「⚔ 出撃」で攻撃に出よう（危なくなったら「🏳 退避」）`;
+  if (!n.rally) return '🚩 集合所を敵の近くに建てると、攻撃に回した兵がそこに集まって待ちます';
   if (P.era >= 3 && !n.shield) return '🛡 シールドで首都を守ろう';
   if (P.era >= 4) return '⛰ 山を作って、敵の通り道をしぼろう';
   return '📘 資源をためて、次の時代をめざそう';
@@ -2186,6 +2324,7 @@ function refreshHud() {
   $('r-pop').textContent = `${P.unitCount}/${P.popCap}`;
   const mine = G.units.filter((u) => u.civ === P && !u.dead);
   const nAtk = mine.filter((u) => u.mode === 'attack').length, nJob = mine.filter((u) => u.job).length;
+  const nMus = mine.filter((u) => u.mode === 'muster').length;
   $('r-work').textContent = nJob;
   $('t-era').textContent = ERAS[P.era].name;
   $('t-year').textContent = fmtYear();
@@ -2227,13 +2366,17 @@ function refreshHud() {
   }
   const pct = Math.round(P.ratio * 100);
   if (document.activeElement !== $('cmd-ratio')) $('cmd-ratio').value = pct;
-  $('cmd-ratio-v').textContent = `攻撃 ${pct}% ・ 守り ${100 - pct}%`;
+  $('cmd-ratio-v').textContent = `集合・攻撃 ${pct}% ・ 守り ${100 - pct}%`;
   const tgt = P.attackTarget;
   $('cmd-target').textContent = tgt
     ? `🎯 目標：${tgt.name}の${P.targetB ? nameOf(P.targetB) : '首都'}`
     : '🎯 目標：なし（右の「狙う」か、敵の建物をクリック）';
+  const sb = $('cmd-sortie');
+  sb.textContent = `⚔ 出撃（集合 ${nMus}人）`;
+  sb.disabled = !nMus || !tgt;
+  $('cmd-retreat').disabled = !nAtk;
   $('cmd-def').classList.toggle('on', P.ratio === 0);
-  $('cmd-state').textContent = `⚔ 攻撃中 ${nAtk}人 ／ 🛡 守り ${mine.length - nAtk - nJob}人 ／ 🔨 建築 ${nJob}人`;
+  $('cmd-state').textContent = `⚔ 攻撃中 ${nAtk}人 ／ 🚩 集合中 ${nMus}人 ／ 🛡 守り ${mine.length - nAtk - nMus - nJob}人 ／ 🔨 建築 ${nJob}人`;
   const on = multiOn();
   $('btn-multi').classList.toggle('on', on);
   $('btn-multi-fab').classList.toggle('on', on);
@@ -2245,7 +2388,7 @@ function orderAttack(c, b) {
   if (!c.alive) return;
   const P = G.player;
   P.attackTarget = c; P.targetB = b && b.type !== 'capital' ? b : null;
-  if (P.ratio === 0) { P.ratio = 0.5; log('⚔ 攻撃の割合を 50% にしました（スライダーで変えられます）'); }
+  if (P.ratio === 0) { P.ratio = 0.5; log('⚔ 攻撃の割合を 50% にしました。兵が集合所に集まったら「⚔ 出撃」を押そう'); }
   log(`🎯 目標：${c.name}の${P.targetB ? nameOf(P.targetB) : '首都'}`, 'good');
   rebalance(P);
   refreshHud();
@@ -2437,6 +2580,25 @@ const pickRing = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.68, 32).rotateX(-
 pickRing.renderOrder = 5;
 scene.add(targetMarker, pickRing);
 targetMarker.visible = pickRing.visible = false;
+// 今使っている集合所の上の「🚩N」の札（N＝集合中の兵の数）。数が変わったときだけ描き直す
+const rallyCv = document.createElement('canvas');
+rallyCv.width = 128; rallyCv.height = 64;
+const rallyTex = new THREE.CanvasTexture(rallyCv);
+const rallyLabel = new THREE.Sprite(new THREE.SpriteMaterial({ map: rallyTex, depthTest: false, transparent: true }));
+rallyLabel.scale.set(1.1, 0.55, 1); rallyLabel.renderOrder = 999; rallyLabel.visible = false;
+scene.add(rallyLabel);
+let rallyLabelN = -1;
+function drawRallyLabel(n) {
+  if (n === rallyLabelN) return;
+  rallyLabelN = n;
+  const x = rallyCv.getContext('2d');
+  x.clearRect(0, 0, 128, 64);
+  x.fillStyle = 'rgba(18, 26, 36, 0.85)';
+  x.beginPath(); x.roundRect(4, 6, 120, 52, 14); x.fill();
+  x.fillStyle = '#ffcf4a'; x.font = 'bold 34px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText(`🚩${n}`, 64, 34);
+  rallyTex.needsUpdate = true;
+}
 // 撤去を選んでいるとき、指している建物にかぶせる赤い箱
 const demoMark = new THREE.Mesh(GEO.box, new THREE.MeshBasicMaterial({ color: 0xff3a2a, transparent: true, opacity: 0.35, depthWrite: false }));
 demoMark.renderOrder = 6; demoMark.visible = false;
@@ -2760,6 +2922,11 @@ function pickHtml(b) {
     return h;
   }
   if (b.type === 'shield') h += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
+  if (b.type === 'rally') {
+    h += rallyOf(P) === b
+      ? `<br>🚩 今使っている集合所（集合中 ${P.musterN || 0}人）<br><span style="color:var(--muted)">近くで待つ兵は毎秒 HP ${RALLY_HEAL * 100}% 回復</span>`
+      : '<br><span style="color:var(--muted)">🚩 今は使っていない（攻撃目標に一番近い集合所を使う）</span>';
+  }
   if (b.type === 'turret' || b.type === 'capital') { const tr = ERAS[b.era].turret; h += `<br>攻撃：${tr.name}（射程 ${tr.range}・威力 ${tr.dmg}）`; }
   const p = prodOf(b);
   if (p) h += '<br>生産：' + Object.entries(p).map(([k, v]) => `${RES_ICON[k]}+${v.toFixed(1)}`).join(' ') + '/秒';
@@ -2871,6 +3038,8 @@ $('btn-start').onclick = startGame;
 $('btn-retry').onclick = toSetup;
 $('btn-era').onclick = () => { if (G && canAfford(G.player, ERAS[G.player.era + 1]?.cost || { x: 1 })) advanceEra(G.player); refreshHud(); };
 $('cmd-def').onclick = () => { setRatio(0); log('🛡 全員、首都にもどれ！'); };
+$('cmd-sortie').onclick = () => { if (G && G.phase === 'play') { playerSortie(); refreshHud(); } };
+$('cmd-retreat').onclick = () => { if (G && G.phase === 'play') { playerRetreat(); refreshHud(); } };
 $('cmd-ratio').addEventListener('input', (e) => setRatio(e.target.value / 100));
 for (const b of document.querySelectorAll('[data-speed]')) b.onclick = () => setSpeed(+b.dataset.speed);
 (() => {
@@ -2900,6 +3069,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     startReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
     T, TOOLS, useTool, demolishAt, startDemolish, stopDemolish, cancelSite, terraWhy, allConnected,
     setMultiMode, boxSelect, multiGroups, get multiRing() { return multiRing; },
+    rallyOf, playerSortie, playerRetreat, aiWave, musterOf, get rallyLabel() { return rallyLabel; },
     // 建物の足もとが画面のどこに見えるか（テストで押す場所を決めるため）
     screenOf(b) { _p.set(b.x, 0.35, b.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
     // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
