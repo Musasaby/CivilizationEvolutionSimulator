@@ -95,14 +95,34 @@
   #cmd-target { font-size: 12px; margin-top: 4px; color: var(--accent); }
   #cmd-state { font-size: 12px; color: var(--muted); line-height: 1.5; }
   #topbar .rate { font-size: 11px; margin-left: 2px; }
-  #info button { margin-top: 6px; padding: 4px 8px; font-size: 12px; }
-  #info .cs .no { color: var(--bad); }
+  #info button, #multi-panel button { margin-top: 6px; padding: 4px 8px; font-size: 12px; }
+  #info .cs .no, #multi-panel .cs .no { color: var(--bad); }
   #log { position: fixed; left: 244px; bottom: 12px; z-index: 5; display: flex; flex-direction: column; gap: 4px; pointer-events: none; max-width: 420px; }
   #log div { background: var(--panel); border-radius: 8px; padding: 5px 10px; font-size: 12px; animation: fadein .25s; transition: opacity 1s; }
   #log div.warn { border-left: 4px solid var(--bad); }
   #log div.good { border-left: 4px solid var(--good); }
   #log div.era { border-left: 4px solid var(--accent); }
-  #info { position: fixed; right: 10px; bottom: 12px; width: 230px; padding: 8px 10px; z-index: 5; font-size: 12px; line-height: 1.6; }
+  #info, #multi-panel { position: fixed; right: 10px; bottom: 12px; width: 230px; padding: 8px 10px; z-index: 5; font-size: 12px; line-height: 1.6; }
+  /* ---- 複数選択 ---- */
+  #multi-panel button { min-width: 120px; text-align: left; }
+  #multi-panel button.off { opacity: 0.4; cursor: default; }
+  #btn-multi.on, #btn-multi-fab.on { background: rgba(255, 207, 74, 0.35); border-color: var(--accent); box-shadow: 0 0 10px rgba(255, 207, 74, 0.8); }
+  #btn-multi-fab { display: none; position: fixed; right: 12px; bottom: 12px; width: 52px; height: 52px; border-radius: 50%;
+    padding: 0; font-size: 22px; z-index: 7; background: var(--panel); }
+  #multi-badge { position: fixed; top: 56px; left: 50%; transform: translateX(-50%); z-index: 5; padding: 3px 12px;
+    font-size: 12px; font-weight: 700; color: var(--accent); pointer-events: none; }
+  #marquee { position: fixed; z-index: 6; border: 2px dashed var(--accent); background: rgba(255, 207, 74, 0.12); pointer-events: none; }
+  #confirm { position: fixed; inset: 0; z-index: 12; display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.25); padding: 16px; }
+  #confirm .box { max-width: 360px; width: 100%; padding: 16px 18px; font-size: 14px; line-height: 1.7; }
+  #confirm .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+  #confirm .row button { padding: 8px 14px; }
+  /* スマホ：上のバーがはみ出して押せないので、☑ は地図の右下の丸いボタンにする */
+  @media (max-width: 600px) {
+    #btn-multi { display: none; }
+    #btn-multi-fab { display: block; }
+    #info, #multi-panel { right: 72px; }
+  }
   #banner { position: fixed; left: 50%; top: 18%; transform: translateX(-50%); text-align: center; z-index: 8; pointer-events: none; opacity: 0; }
   #banner.show { animation: banner 3.2s ease-out forwards; }
   #banner .t { font-size: 44px; font-weight: 800; color: #fff; text-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 0 30px rgba(255,207,74,0.9); }
@@ -184,6 +204,7 @@
     <span class="era" id="t-era"></span>
     <span id="t-year"></span>
     <span class="speed"><button data-speed="0">⏸</button><button data-speed="1" class="on">▶</button><button data-speed="2">▶▶</button><button data-speed="4">▶▶▶</button></span>
+    <button id="btn-multi" title="複数選択モード：タップで選ぶ／外す、ドラッグで枠の中をまとめて選ぶ（PC は Ctrl を押している間も）">☑ 選択</button>
   </div>
   <div id="leftpanel" class="panel">
     <div id="era-box">
@@ -211,6 +232,14 @@
   </div>
   <div id="log"></div>
   <div id="info" class="panel"></div>
+  <div id="multi-panel" class="panel" hidden></div>
+  <button id="btn-multi-fab" title="複数選択モード">☑</button>
+  <div id="multi-badge" class="panel" hidden>☑ 選択モード中</div>
+  <div id="marquee" hidden></div>
+  <div id="confirm" hidden>
+    <div class="box panel"><div class="msg"></div>
+      <div class="row"><button class="ok primary"></button><button class="no">やめる</button></div></div>
+  </div>
   <div id="banner"><div class="t"></div><div class="s"></div></div>
   <div id="alert"></div>
 </div>
@@ -855,7 +884,7 @@ function newWorld(cfg) {
     occ: new Array(N).fill(null), civs: [], units: [], buildings: [], projectiles: [], fx: [],
     unitGrid: Array.from({ length: N }, () => []), time: 0, speed: 1, phase: 'edit',
     dirtyTerritory: false, dirtyTerrain: false, alertCd: 0, sel: null, pick: null, seed: (Math.random() * 1e9) | 0,
-    maxEra: 0, civKills: 0, unified: false, flows: new Map(),
+    maxEra: 0, civKills: 0, unified: false, flows: new Map(), multi: new Set(),
   };
   const total = 1 + cfg.enemies.length;
   for (let i = 0; i < total; i++) {
@@ -889,6 +918,9 @@ function clearWorld() {
     scene.remove(terrainGroup); tileMesh.material.dispose(); borderMesh.geometry.dispose(); borderMesh.material.dispose();
     terrainGroup = null; borderMesh = null;
   }
+  if (multiRing) multiRing.count = 0;
+  multiMode = false;
+  closeConfirm();
   G = null;
 }
 
@@ -1236,6 +1268,7 @@ function removeBuilding(b) {
   G.dirtyTerritory = true;
   if (b.type === 'wall') G.flows.clear();
   if (G.pick === b) G.pick = null;
+  G.multi.delete(b);
   recalcPop(b.civ);
 }
 function workTime(b) { return b.type === 'terra' ? TOOLS[b.terra].time : BUILD[b.type].time; }
@@ -2055,6 +2088,7 @@ function syncVisuals(rdt) {
   }
   pickRing.visible = !!G.pick && !G.pick.dead;
   if (pickRing.visible) pickRing.position.set(G.pick.x, 0.42, G.pick.z);
+  syncMultiRings();
   updateFx(rdt);
 }
 
@@ -2200,6 +2234,11 @@ function refreshHud() {
     : '🎯 目標：なし（右の「狙う」か、敵の建物をクリック）';
   $('cmd-def').classList.toggle('on', P.ratio === 0);
   $('cmd-state').textContent = `⚔ 攻撃中 ${nAtk}人 ／ 🛡 守り ${mine.length - nAtk - nJob}人 ／ 🔨 建築 ${nJob}人`;
+  const on = multiOn();
+  $('btn-multi').classList.toggle('on', on);
+  $('btn-multi-fab').classList.toggle('on', on);
+  $('multi-badge').hidden = !on;
+  updateMultiPanel();
 }
 // 攻撃目標を決める。b を渡すとその建物を、null なら首都を狙う
 function orderAttack(c, b) {
@@ -2224,8 +2263,157 @@ function select(kind, key) {
     const def = BUILD[key] || TOOLS[key];
     if (def.era && G.player.era < def.era) { log(`🔒 ${def.name}は${ERAS[def.era].name}で使えます`, 'warn'); return; }
     G.sel = { kind, key }; G.pick = null;
+    multiMode = false;   // 道具をえらんだら、選択モードは出る（選んだ建物は残る）
   }
   refreshHud();
+}
+
+// ---------------------------------------------------------------------
+// 複数選択：自分の建物をまとめて選び、まとめて改修・撤去する
+// ---------------------------------------------------------------------
+let multiMode = false;   // ☑ ボタンで入ったか
+let ctrlHeld = false;    // PC で Ctrl（Mac は ⌘）を押しているか
+// Ctrl を押したまま道具をえらんだときは、道具を優先する
+const multiOn = () => !!G && G.phase === 'play' && !G.sel && (multiMode || ctrlHeld);
+function canMulti(b) { return !!b && !b.dead && b.civ === G.player && b.type !== 'capital'; }
+// 選択モードに入ると、えらんでいる道具はやめる（出ても道具にはもどらない）
+function enterMulti() { G.sel = null; G.pick = null; }
+function setMultiMode(on) {
+  if (!G || G.phase !== 'play') return;
+  multiMode = on;
+  if (on) enterMulti();
+  refreshHud();
+}
+function setCtrl(on) {
+  if (ctrlHeld === on) return;
+  ctrlHeld = on;
+  if (!G || G.phase !== 'play') return;
+  if (on) enterMulti();
+  refreshHud();
+}
+function toggleMulti(b) {
+  if (!canMulti(b)) return;
+  if (G.multi.has(b)) G.multi.delete(b); else G.multi.add(b);
+  refreshHud();
+}
+// 画面の四角（x0,y0）〜（x1,y1）に、足もとが入っている自分の建物を選択に足す
+const _p = new THREE.Vector3();
+function boxSelect(x0, y0, x1, y1) {
+  const l = Math.min(x0, x1), r = Math.max(x0, x1), t = Math.min(y0, y1), btm = Math.max(y0, y1);
+  for (const b of G.buildings) {
+    if (!canMulti(b)) continue;
+    _p.set(b.x, 0.35, b.z).project(camera);
+    if (_p.z > 1) continue;   // カメラのうしろ
+    const sx = (_p.x + 1) / 2 * innerWidth, sy = (1 - _p.y) / 2 * innerHeight;
+    if (sx >= l && sx <= r && sy >= t && sy <= btm) G.multi.add(b);
+  }
+  refreshHud();
+}
+function clearMulti() { G.multi.clear(); refreshHud(); }
+// 選んだものを、できる操作ごとに分ける
+function multiGroups() {
+  const all = [...G.multi].filter((b) => !b.dead);
+  return {
+    all,
+    reno: all.filter(canRenovate).sort((a, b) => a.era - b.era),   // 古い時代から順に
+    demo: all.filter(canDemolish),
+    sites: all.filter((b) => !b.done),
+    undemo: all.filter((b) => b.done && b.demo),
+    renoNow: all.filter((b) => b.reno),
+  };
+}
+function sumRes(list) {
+  const o = {};
+  for (const x of list) for (const k in x) o[k] = (o[k] || 0) + x[k];
+  return o;
+}
+const siteRefund = (b) => refundOf(b, b.progress === 0 ? 1 : 0.5);
+const typeName = (b) => b.type === 'terra' ? TOOLS[b.terra].site : BUILD[b.type].name;
+let multiKey = '';
+function updateMultiPanel() {
+  const el = $('multi-panel');
+  if (!G || G.phase !== 'play' || !G.multi.size || G.sel) { el.hidden = true; multiKey = ''; return; }
+  el.hidden = false;
+  const P = G.player, g = multiGroups();
+  const count = new Map();
+  for (const b of g.all) count.set(typeName(b), (count.get(typeName(b)) || 0) + 1);
+  const kinds = [...count].sort((a, b) => b[1] - a[1]).map(([n, k]) => `${n}${k}`).join('・');
+  const renoCostSum = sumRes(g.reno.map((b) => renoCost(P, b.type)));
+  const back = sumRes([...g.demo.map((b) => refundOf(b, 0.5)), ...g.sites.map(siteRefund)]);
+  const nDemo = g.demo.length + g.sites.length;
+  const btn = (act, n, label) => `<button data-act="${act}" class="${n ? '' : 'off'}">${label} ${n}こ</button>`;
+  let h = `<b>☑ ${g.all.length}こ選択中</b>（${kinds}）<br>`;
+  h += `${btn('m-reno', g.reno.length, '🔨 改修')} <span class="cs">${g.reno.length ? costText(P, renoCostSum) : ''}</span><br>`;
+  h += `${btn('m-demo', nDemo, '🗑 撤去')} <span class="cs">${nDemo ? `もどる：${resText(back)}` : ''}</span><br>`;
+  if (g.undemo.length) h += `${btn('m-undemo', g.undemo.length, '↩ 撤去をやめる')}<br>`;
+  h += '<button data-act="m-clear">✕ 選択を解除</button>';
+  if (h !== multiKey) { multiKey = h; el.innerHTML = h; }
+}
+// まとめて改修：古い時代から順に。資源が足りなくなったら、そこでやめる
+function multiReno() {
+  const list = multiGroups().reno;
+  let n = 0;
+  for (const b of list) { if (!startReno(b)) break; n++; }
+  if (!n) { if (list.length) log('資源が足りません', 'warn'); return; }
+  const rest = list.length - n;
+  log(rest ? `🔨 ${n}こ改修する（資源が足りず ${rest}こは残った）` : `🔨 ${n}こ改修する`, rest ? 'warn' : 'good');
+}
+function multiUndemo() {
+  const list = multiGroups().undemo;
+  for (const b of list) stopDemolish(b);
+  if (list.length) log(`↩ ${list.length}この撤去をやめた`);
+}
+// まとめて撤去：確認の画面を出してから
+function askMultiDemo() {
+  const g = multiGroups(), n = g.demo.length + g.sites.length;
+  if (!n) { log('撤去できるものがありません', 'warn'); return; }
+  const back = sumRes([...g.demo.map((b) => refundOf(b, 0.5)), ...g.sites.map(siteRefund)]);
+  let msg = `<b>${n}こ撤去します。よろしいですか？</b><br>`;
+  if (g.demo.length) msg += `・完成した建物 ${g.demo.length}こ：兵が壊しに行く<br>`;
+  if (g.sites.length) msg += `・予定地 ${g.sites.length}こ：すぐ消える<br>`;
+  msg += `もどる資源：${resText(back)}`;
+  if (g.renoNow.length) msg += `<br><span style="color:var(--muted)">改修中の${g.renoNow.length}こは撤去しません</span>`;
+  openConfirm(msg, '🗑 撤去する', multiDemo);
+}
+function multiDemo() {
+  const g = multiGroups();
+  for (const b of g.demo) startDemolish(b);
+  const back = sumRes(g.sites.map(cancelSite));
+  let text = `🗑 ${g.demo.length + g.sites.length}こ撤去する`;
+  if (g.sites.length) text += `（予定地 ${g.sites.length}こは消えて ${resText(back)} がもどった）`;
+  log(text);
+  refreshHud();
+}
+// 確認の画面。ゲームは止めない。Esc・「やめる」で閉じる
+let confirmOk = null;
+function openConfirm(html, okLabel, onOk) {
+  const el = $('confirm');
+  el.querySelector('.msg').innerHTML = html;
+  el.querySelector('.ok').textContent = okLabel;
+  confirmOk = onOk;
+  el.hidden = false;
+}
+function closeConfirm() { $('confirm').hidden = true; confirmOk = null; }
+const confirmOpen = () => !$('confirm').hidden;
+// 選んだ建物の足もとの黄色い輪。壁を何百こ選んでも重くならないよう、1つの InstancedMesh で出す
+let multiRing = null;
+function syncMultiRings() {
+  const n = G.phase === 'play' ? G.multi.size : 0;
+  if (!multiRing || multiRing.instanceMatrix.count < n) {   // 数が上限をこえたら作り直す
+    const cap = Math.max(64, 2 ** Math.ceil(Math.log2(n || 1)));
+    if (multiRing) { scene.remove(multiRing); multiRing.dispose(); }
+    multiRing = new THREE.InstancedMesh(pickRing.geometry, pickRing.material, cap);
+    multiRing.renderOrder = 5; multiRing.frustumCulled = false;
+    scene.add(multiRing);
+  }
+  let k = 0;
+  _o.rotation.set(0, 0, 0); _o.scale.set(1, 1, 1);
+  for (const b of G.multi) {
+    _o.position.set(b.x, 0.42, b.z); _o.updateMatrix();
+    multiRing.setMatrixAt(k++, _o.matrix);
+  }
+  multiRing.count = k;
+  multiRing.instanceMatrix.needsUpdate = true;
 }
 
 // =====================================================================
@@ -2306,14 +2494,27 @@ let tap = null;               // 押したけれど、まだ決まっていな�
 const TAP_MOVE = 10;          // これより動いたらタップではない（px）
 const TOUCH_PAINT_DELAY = 80; // タッチで塗りはじめるまで待つ時間（ms）。2本目の指を待つ
 function cancelTap() {
+  if (tap && (tap.box || tap.frozen)) { $('marquee').hidden = true; controls.enabled = true; }
   tap = null;
   if (painting) { painting = false; controls.enabled = true; }
+}
+// 選択モードの枠を、押したところから今の位置までの四角に合わせる
+function drawMarquee(t, x, y) {
+  const s = $('marquee').style;
+  s.left = `${Math.min(t.x, x)}px`; s.top = `${Math.min(t.y, y)}px`;
+  s.width = `${Math.abs(x - t.x)}px`; s.height = `${Math.abs(y - t.y)}px`;
 }
 canvas.addEventListener('pointermove', (ev) => {
   hover = pickTile(ev);
   if (!G) return;
+  if (tap && tap.box && tap.id === ev.pointerId) drawMarquee(tap, ev.clientX, ev.clientY);
   if (tap && tap.id === ev.pointerId && Math.hypot(ev.clientX - tap.x, ev.clientY - tap.y) > TAP_MOVE) {
     tap.moved = true;
+    // 選択モードで指1本（左ボタン）のまま動いたら、枠で選ぶ。そのあいだはカメラを止める
+    if (tap.multi && !tap.box && pointers.size === 1) {
+      tap.box = true; controls.enabled = false;
+      $('marquee').hidden = false; drawMarquee(tap, ev.clientX, ev.clientY);
+    }
     // タッチでは、指1本のまま少し待ってから塗りはじめる（そのあいだはカメラを止める）
     if (G.phase === 'edit' && tap.touch && !painting && pointers.size === 1 &&
       performance.now() - tap.t > TOUCH_PAINT_DELAY) {
@@ -2328,10 +2529,18 @@ canvas.addEventListener('pointerdown', (ev) => {
   if (pointers.size > 1) { cancelTap(); return; }
   if (ev.button !== 0 || !G) return;
   hover = pickTile(ev);
+  // Ctrl・⌘ は、キーを押したときにゲームの画面に向いていなかった場合もあるので、ここでも見る
+  if (G.phase === 'play') setCtrl(ev.ctrlKey || ev.metaKey);
+  cancelTap();   // 離したことを取りこぼした前の操作が残っていたら片付ける
   tap = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, t: performance.now(),
-    touch: ev.pointerType !== 'mouse', tile: hover, moved: false };
+    touch: ev.pointerType !== 'mouse', tile: hover, moved: false, multi: multiOn(), box: false };
   // マウスは誤操作の心配がないので、押した瞬間から塗る
   if (G.phase === 'edit' && !tap.touch) { painting = true; paintAt(hover); }
+}, { capture: true });   // カメラ操作より先に動かす。2本目の指で枠や塗りをやめ、カメラを動かせる状態にもどしてから、カメラに指をわたすため
+// 選択モードでは、押した瞬間からカメラを止める（少し動かしただけで回らないように）。
+// カメラが1本目の指を受け取ったあとで止めるので、2本目の指が来れば、ふつうの2本指の操作になる
+canvas.addEventListener('pointerdown', (ev) => {
+  if (tap && tap.id === ev.pointerId && tap.multi) { tap.frozen = true; controls.enabled = false; }
 });
 // 2本指をひねると、カメラを上下の軸のまわりに回す（拡大縮小・移動は OrbitControls のまま）
 const twist = { pts: new Map(), last: null, sum: 0 };
@@ -2373,20 +2582,25 @@ function endPointer(ev) {
   if (!t || t.id !== ev.pointerId) return;
   const wasPainting = painting;
   cancelTap();
-  if (wasPainting || t.moved || ev.type === 'pointercancel' || !G) return;
+  if (ev.type === 'pointercancel' || !G) return;
+  if (t.box) { if (G.phase === 'play') boxSelect(t.x, t.y, ev.clientX, ev.clientY); return; }
+  if (wasPainting || t.moved) return;
   if (G.phase === 'edit') paintAt(t.tile);
-  else if (G.phase === 'play') tapTile(t.tile);
+  else if (G.phase === 'play') tapTile(t.tile, t.multi);
 }
 addEventListener('pointerup', endPointer);
 addEventListener('pointercancel', endPointer);
-function tapTile(h) {
+function tapTile(h, multi = false) {
   hover = h;
   if (!h) return;
   const P = G.player;
+  // 選択モード：自分の建物なら、選ぶ／外すを切りかえる。ほかは何もしない
+  if (multi) { toggleMulti(G.occ[h.tz * G.size + h.tx]); return; }
   if (!G.sel) {
-    // 何もえらんでいないとき：自分の建物 → くわしく見る／敵の建物 → 攻撃目標にする
+    // 何もえらんでいないとき：自分の建物 → くわしく見る／敵の建物 → 攻撃目標にする／何もない → 選択を消す
     const b = G.occ[hover.tz * G.size + hover.tx];
     G.pick = b && b.civ === P ? b : null;
+    if (!b || b.civ === P) clearMulti();
     if (b && b.civ !== P) orderAttack(b.civ, b);
     return;
   }
@@ -2410,19 +2624,41 @@ $('info').addEventListener('pointerdown', (ev) => {
   if (act === 'pause') b.paused = !b.paused;
   refreshHud();
 });
+// 選択パネルのボタン（左ボタンだけ）
+$('multi-panel').addEventListener('pointerdown', (ev) => {
+  const act = ev.target.closest('[data-act]')?.dataset.act;
+  if (ev.button !== 0 || !act || !G || G.phase !== 'play') return;
+  if (act === 'm-reno') multiReno();
+  if (act === 'm-demo') askMultiDemo();
+  if (act === 'm-undemo') multiUndemo();
+  if (act === 'm-clear') G.multi.clear();
+  refreshHud();
+});
+$('btn-multi').onclick = $('btn-multi-fab').onclick = () => setMultiMode(!multiMode);
+$('confirm').querySelector('.ok').onclick = () => { const f = confirmOk; closeConfirm(); if (f && G && G.phase === 'play') f(); };
+$('confirm').querySelector('.no').onclick = closeConfirm;
 const keys = new Set();
 addEventListener('keydown', (e) => {
+  // Ctrl・⌘ は、スライダーをさわった直後でも効くように先に見る。ほかのキー（Ctrl+W など）は横取りしない
+  if (e.key === 'Control' || e.key === 'Meta') setCtrl(true);
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   const k = e.key.toLowerCase();
   keys.add(k);
   if (!G || G.phase !== 'play') return;
-  if (k === 'escape') { G.pick = null; select(null); }
+  if (k === 'escape') {
+    if (confirmOpen()) closeConfirm();
+    else { G.pick = null; select(null); clearMulti(); }
+  }
+  if (k === 'delete' && G.multi.size && !confirmOpen()) askMultiDemo();
   if (k === ' ') { e.preventDefault(); setSpeed(G.speed === 0 ? 1 : 0); }
   const n = parseInt(k, 10);
   if (n >= 1 && n <= Math.min(9, BUILD_KEYS.length)) select('build', BUILD_KEYS[n - 1]);
 });
-addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-addEventListener('blur', () => keys.clear());
+addEventListener('keyup', (e) => {
+  keys.delete(e.key.toLowerCase());
+  if (e.key === 'Control' || e.key === 'Meta') setCtrl(false);
+});
+addEventListener('blur', () => { keys.clear(); setCtrl(false); });
 function panKeys(dt) {
   const f = new THREE.Vector3(); camera.getWorldDirection(f); f.y = 0; f.normalize();
   const r = new THREE.Vector3().crossVectors(f, camera.up).normalize();
@@ -2472,7 +2708,8 @@ function updateHover() {
 let infoKey = '';
 function updateInfo() {
   const el = $('info');
-  if (!G || G.phase !== 'play') { el.hidden = true; return; }
+  // 複数選択があるときは、同じ場所に選択パネルを出す（道具をえらんでいる間は、道具の説明を出す）
+  if (!G || G.phase !== 'play' || (G.multi.size && !G.sel)) { el.hidden = true; return; }
   el.hidden = false;
   let html = '';
   const P = G.player;
@@ -2500,7 +2737,7 @@ function updateInfo() {
       if (b.type === 'shield' && b.done) html += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
       if (!G.sel) html += `<br><span style="color:var(--muted)">${b.civ === P ? 'クリックでくわしく見る' : 'クリックで攻撃目標にする'}</span>`;
     }
-  } else if (!G.sel && !G.pick) html = '<span style="color:var(--muted)">左クリック：置く／自分の建物を見る／敵の建物を狙う<br>右ドラッグ：回転 ／ ホイール：拡大 ／ WASD：移動<br>1〜9：建物をえらぶ ／ スペース：一時停止</span>';
+  } else if (!G.sel && !G.pick) html = '<span style="color:var(--muted)">左クリック：置く／自分の建物を見る／敵の建物を狙う<br>右ドラッグ：回転 ／ ホイール：拡大 ／ WASD：移動<br>1〜9：建物をえらぶ ／ スペース：一時停止<br>☑・Ctrl＋クリック／ドラッグ：まとめて選ぶ</span>';
   if (html !== infoKey) { infoKey = html; el.innerHTML = html; }
 }
 // えらんだ自分の建物のくわしい情報と、ボタン
@@ -2606,6 +2843,7 @@ function startGame() {
 }
 function gameOver() {
   G.phase = 'over';
+  closeConfirm();
   const years = Math.floor(G.time * 10);
   const cur = { era: G.maxEra, years };
   const best = loadBest();
@@ -2661,6 +2899,9 @@ if (new URLSearchParams(location.search).has('debug')) {
     get G() { return G; }, camera, controls, advanceEra, placeBuilding, spawnUnit, findSpot, aiThink, orderAttack, setRatio,
     startReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
     T, TOOLS, useTool, demolishAt, startDemolish, stopDemolish, cancelSite, terraWhy, allConnected,
+    setMultiMode, boxSelect, multiGroups, get multiRing() { return multiRing; },
+    // 建物の足もとが画面のどこに見えるか（テストで押す場所を決めるため）
+    screenOf(b) { _p.set(b.x, 0.35, b.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
     // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
     step(sec) { for (let t = 0; t < sec && G.phase === 'play'; t += 0.05) update(0.05); },
   };
