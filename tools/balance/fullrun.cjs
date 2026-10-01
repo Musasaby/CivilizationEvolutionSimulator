@@ -1,11 +1,13 @@
 // 通しのテスト：プレイヤーも AI に動かさせ、3つの作戦 × 地形5種類で、ゲームを最後まで（または MINUTES 分）回す
-// 使い方：node fullrun.cjs [分=20] [くり返し=1]
+// 使い方：node fullrun.cjs [分=20] [くり返し=1] [作戦名をカンマで区切る=全部] [出力ファイル名=fullrun-latest.md]
 const fs = require('fs');
 const path = require('path');
 const { openGame } = require('./common.cjs');
 
 const MINUTES = +(process.argv[2] || 20);
 const REPEAT = +(process.argv[3] || 1);
+const ONLY = process.argv[4] ? process.argv[4].split(',') : null;
+const OUTFILE = process.argv[5] || 'fullrun-latest.md';
 
 // 作戦と地形の一覧は prototype/index.html の BAL.STRATEGIES・BAL.TERRAINS（観戦パネルと同じもの）
 async function setupGame(page, tname, sname) {
@@ -18,7 +20,8 @@ async function setupGame(page, tname, sname) {
   const { browser, page } = await openGame();
   const rows = ['| 地形 | 作戦 | 生きのびた時間 | 到達した時代 | 倒した敵 | ほろぼした国 | 兵の上限まで使った割合 | 最後の軍（歩/機/射/攻） |', '| --- | --- | --- | --- | --- | --- | --- | --- |'];
   const all = [];
-  const { STRATEGIES, TERRAINS } = await page.evaluate(() => ces.BAL);
+  const { STRATEGIES: ALL, TERRAINS } = await page.evaluate(() => ces.BAL);
+  const STRATEGIES = Object.fromEntries(Object.entries(ALL).filter(([k]) => !ONLY || ONLY.includes(k)));
   for (let rep = 0; rep < REPEAT; rep++) {
     for (const tname of Object.keys(TERRAINS)) {
       for (const sname of Object.keys(STRATEGIES)) {
@@ -52,7 +55,7 @@ async function setupGame(page, tname, sname) {
     rows.push(`| ${s} | ${l.filter((x) => !x.over).length} / ${l.length} | ${avg((x) => x.era).toFixed(1)} | ${avg((x) => x.kills).toFixed(0)} | ${(avg((x) => x.t) / 60).toFixed(1)}分 |`);
   }
   const md = rows.join('\n');
-  fs.writeFileSync(path.join(__dirname, 'fullrun-latest.md'), md + '\n');
+  fs.writeFileSync(path.join(__dirname, OUTFILE), md + '\n');
   console.log(md.split('\n').slice(-5).join('\n'));
   await browser.close();
 })();

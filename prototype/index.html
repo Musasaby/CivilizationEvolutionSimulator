@@ -213,7 +213,7 @@
     <span class="res" title="木材：建物に使う">🪵 <b id="r-wood">0</b></span>
     <span class="res" title="石：建物・タレットに使う">🪨 <b id="r-stone">0</b></span>
     <span class="res" title="知識：時代を進めるのに使う">📘 <b id="r-know">0</b></span>
-    <span class="res" title="兵士の枠 / 上限（家でふえる。騎兵・大砲兵・ロボット兵は2枠、戦車は3枠）">👥 <b id="r-pop">0</b></span>
+    <span class="res" title="兵士の枠 / 上限（家でふえる。歩兵系・射撃系は1枠、機動系・攻城系は2枠）">👥 <b id="r-pop">0</b></span>
     <span class="res" title="建物を建てている兵士の数">🔨 <b id="r-work">0</b></span>
     <span class="era" id="t-era"></span>
     <span id="t-year"></span>
@@ -309,67 +309,73 @@ const DEFAULT_PERS = ['aggressive', 'balanced', 'builder', 'balanced', 'aggressi
 // タレットの dmg は、その時代の歩兵の HP（infHp）に合わせている。兵の強さの伸びを変えたら、ここも同じ割合で変える
 const ERAS = [
   { name: '石器時代', wall: 0x9b7a4e,
-    unit: { range: 1.0, speed: 1.3, cd: 1.0 },
     turret: { name: '投石台', range: 3.5, dmg: 6, cd: 1.3, splash: 0, shot: 0x8a7a66, speed: 9, arc: 1.4 }, cost: null },
-  { name: '青銅器時代', wall: 0xb48a55, unlock: '射撃場（弓兵）・弓の塔・壁が使える！ 古い建物は「改修」で新しくなる',
-    unit: { range: 1.0, speed: 1.4, cd: 0.9 },
-    turret: { name: '弓の塔', range: 4.5, dmg: 6.5, cd: 0.9, splash: 0, shot: 0xe8dcb0, speed: 14, arc: 0.6 },
+  { name: '青銅器時代', wall: 0xb48a55, unlock: '弓の塔・壁が使える！ 古い建物は「改修」で新しくなり、古い兵は「進化」できる',
+    turret: { name: '弓の塔', range: 4.5, dmg: 6.9, cd: 0.9, splash: 0, shot: 0xe8dcb0, speed: 14, arc: 0.6 },
     cost: { food: 150, wood: 150, know: 60 } },
   { name: '中世', wall: 0xa7a39a, unlock: '厩舎（騎兵）・バリスタ・市場が使える！',
-    unit: { range: 1.1, speed: 1.4, cd: 0.9 },
-    turret: { name: 'バリスタ', range: 5, dmg: 10, cd: 1.1, splash: 0, shot: 0xcfc4a6, speed: 16, arc: 0.3 },
+    turret: { name: 'バリスタ', range: 5, dmg: 11.4, cd: 1.1, splash: 0, shot: 0xcfc4a6, speed: 16, arc: 0.3 },
     cost: { food: 450, wood: 450, stone: 250, know: 250 } },
-  { name: '火薬の時代', wall: 0xa0705a, unlock: '砲兵工場（大砲兵）・大砲・シールド・爆破が使える！ 歩兵は銃兵に',
-    unit: { range: 3.5, speed: 1.5, cd: 1.3, shot: 0x3a3a3a },
-    turret: { name: '大砲', range: 6, dmg: 18, cd: 1.8, splash: 1.6, shot: 0x2a2a2a, speed: 10, arc: 1.2 },
+  { name: '火薬の時代', wall: 0xa0705a, unlock: '砲兵工場（大砲兵）・大砲・シールド・爆破が使える！',
+    turret: { name: '大砲', range: 6, dmg: 21.8, cd: 1.8, splash: 1.6, shot: 0x2a2a2a, speed: 10, arc: 1.2 },
     cost: { food: 1000, wood: 900, stone: 850, know: 700 } },
-  { name: '近代', wall: 0x8b949c, unlock: '戦車工場・機関銃・工場が使える！ 山や湖も作れる',
-    unit: { range: 4.5, speed: 1.7, cd: 1.0, shot: 0xffd84a },
-    turret: { name: '機関銃', range: 6, dmg: 3.6, cd: 0.18, splash: 0, shot: 0xffd84a, speed: 24, arc: 0 },
+  { name: '近代', wall: 0x8b949c, unlock: '機関銃・工場が使える！ 山や湖も作れる',
+    turret: { name: '機関銃', range: 6, dmg: 4.6, cd: 0.18, splash: 0, shot: 0xffd84a, speed: 24, arc: 0 },
     cost: { food: 2000, wood: 1700, stone: 1800, know: 1600 } },
-  { name: '未来', wall: 0xe4edf3, unlock: 'ロボット工場・レーザー砲・テレポーターが使える！',
-    unit: { range: 5, speed: 2.0, cd: 0.9, shot: 0x4ff0ff },
-    turret: { name: 'レーザー砲', range: 7.5, dmg: 11.4, cd: 0.45, splash: 0.8, shot: 0x4ff0ff, speed: 30, arc: 0 },
+  { name: '未来', wall: 0xe4edf3, unlock: 'レーザー砲・テレポーターが使える！',
+    turret: { name: 'レーザー砲', range: 7.5, dmg: 15.7, cd: 0.45, splash: 0.8, shot: 0x4ff0ff, speed: 30, arc: 0 },
     cost: { food: 3800, wood: 3200, stone: 3500, know: 3400 } },
 ];
 
-// 歩兵は「作った兵舎の時代」で名前と強さが決まる（射程・速さ・攻撃の間かくは ERAS[].unit。HP・攻撃力は下の式）
+// 兵は4つの系統（歩兵・射撃・機動・攻城）。1つの建物からは1つの系統の兵だけが出て、時代が進むと同じ系統のまま名前と強さが変わる
 // 兵の強さ（HP・攻撃力）は1時代で ERA_GROW 倍。相性の2倍を「1時代差ではひっくり返せず、2時代差ではひっくり返せる」ように
 // 1.41倍（√2）より小さく、1倍より十分大きくしている（→ tools/balance/results.md）
-const INF_NAMES = ['戦士', '槍兵', '剣士', '銃兵', '小銃兵', '光線兵'];
-const ERA_GROW = 1.22;
+const ERA_GROW = 1.33;
 // 歩兵の HP と1秒あたりのダメージ。石器時代の戦士（HP 30・1秒に5）から、1時代ごとに ERA_GROW 倍
 const infHp = (era) => 30 * ERA_GROW ** era, infDps = (era) => 5 * ERA_GROW ** era;
-// slots：兵士の上限の枠をいくつ使うか。大きい兵は枠を多く使うかわりに、HP・攻撃力・費用もその分大きい
-// hp・dps：作った時代の歩兵の何倍か（dps は1秒あたりのダメージ）。1枠あたりで見ると、どの兵も歩兵とほぼ同じ強さ
-// （範囲攻撃・射程・速さがある兵は、その分だけ低め）。費用も1枠あたりで歩兵とほぼ同じ。era は作れるようになる時代
-// rangeGrow：1時代ごとに射程がのびる量（弓兵が、遠くをうつようになった歩兵より少し遠くからうてるように）
-const UNITS = {
-  archer:  { name: '弓兵', era: 1, slots: 1, hp: 0.97, dps: 1.08, range: 3.8, rangeGrow: 0.3, speed: 1.3, cd: 1.2, shot: 0xe8dcb0, arc: 0.5,
-             time: 9, cost: { food: 12, wood: 12 } },
-  cavalry: { name: '騎兵', era: 2, slots: 2, hp: 2.07, dps: 1.7, range: 1.1, speed: 2.9, cd: 0.9,
-             time: 14, cost: { food: 32, wood: 14 } },
-  cannon:  { name: '大砲兵', era: 3, slots: 2, hp: 1.06, dps: 0.68, range: 5.5, speed: 1.0, cd: 3.2, splash: 1.0, vsB: 4, shot: 0x2a2a2a, arc: 1.0,
-             time: 16, cost: { food: 18, wood: 16, stone: 16 } },
-  tank:    { name: '戦車', era: 4, slots: 3, hp: 2.7, dps: 0.95, range: 4.5, speed: 1.8, cd: 1.6, splash: 0.9, vsB: 1.5, shot: 0xffa040, arc: 0.1,
-             time: 22, cost: { food: 25, wood: 15, stone: 35 } },
-  robot:   { name: 'ロボット兵', era: 5, slots: 2, hp: 1.8, dps: 2.0, range: 5, speed: 2.4, cd: 0.7, shot: 0x4ff0ff, arc: 0,
-             time: 16, cost: { food: 20, stone: 24, know: 8 } },
+// LINES：系統ごとの兵。era は作れるようになる時代。names・range・speed・cd・shot・arc・splash・cost は、配列なら時代ごと（石器〜未来）、
+// 数なら全時代で同じ。slots：兵士の上限の枠をいくつ使うか（時代が進んでも同じ。大きい兵は枠を多く使うかわりに HP・攻撃力・費用もその分大きい）
+// hp・dps：石器時代の戦士（HP 30・1秒に5）の何倍か（dps は1秒あたりのダメージ）。近づいてたたく歩兵・機動は、遠くからうてる射撃より
+// 強め（歩兵は費用も高め）。1枠あたりの強さと費用は、どの系統もだいたい同じ（→ tools/balance/results.md）
+// 歩兵と機動は近づいてたたく（射程 1〜1.2）。攻城は建物だけを狙う（vsB：建物へのダメージの倍率）
+const LINES = {
+  foot:   { era: 0, slots: 1, hp: 1.15, dps: 1.15, time: 8, cd: [1.0, 0.9, 0.9, 0.9, 0.9, 0.9],
+            names: ['戦士', '槍兵', '剣士', 'サーベル兵', 'パワーアーマー', '光剣兵'],
+            range: [1.0, 1.0, 1.1, 1.1, 1.2, 1.2], speed: [1.3, 1.4, 1.4, 1.5, 1.7, 2.0],
+            cost: [0, 1, 2, 3, 4, 5].map((e) => ({ food: Math.round(1.15 * (20 + e)) })) },
+  ranged: { era: 0, slots: 1, hp: 0.9, dps: 0.9, time: 9, cd: 1.2, speed: 1.3,
+            names: ['投石兵', '弓兵', '弩兵', '銃兵', '機関銃兵', '光線兵'],
+            range: [3.0, 3.4, 3.8, 4.2, 4.6, 5.0],
+            shot: [0x8a7a66, 0xe8dcb0, 0xcfc4a6, 0x3a3a3a, 0xffd84a, 0x4ff0ff], arc: [0.8, 0.5, 0.4, 0.1, 0, 0],
+            cost: [{ food: 12, wood: 12 }, { food: 12, wood: 12 }, { food: 12, wood: 12 },
+                   { food: 12, wood: 8, stone: 6 }, { food: 12, wood: 8, stone: 6 }, { food: 12, stone: 12, know: 4 }] },
+  mobile: { era: 2, slots: 2, hp: 2.15, dps: 1.75, time: 14, cd: 0.9, range: 1.1,
+            names: [null, null, '騎兵', '胸甲騎兵', '装甲バイク兵', '機械獣'],
+            speed: [0, 0, 2.9, 2.9, 3.2, 3.2],
+            cost: [null, null, { food: 32, wood: 14 }, { food: 32, wood: 10, stone: 6 }, { food: 26, wood: 6, stone: 22 }, { food: 22, stone: 26, know: 8 }] },
+  siege:  { era: 3, slots: 2, hp: 1.06, dps: 0.68, time: 16, cd: 3.2, speed: 1.0, vsB: 4,
+            names: [null, null, null, '大砲兵', 'ロケット砲', '軌道砲'],
+            range: [0, 0, 0, 5.5, 6.5, 8], splash: [0, 0, 0, 1.0, 1.1, 1.3],
+            shot: [0, 0, 0, 0x2a2a2a, 0xff8040, 0x4ff0ff], arc: [0, 0, 0, 1.0, 0.8, 0.3],
+            cost: [null, null, null, { food: 18, wood: 16, stone: 16 }, { food: 16, wood: 10, stone: 28 }, { food: 14, stone: 30, know: 12 }] },
 };
 // 建物へのダメージの時代ごとの倍率。兵の伸びを前（1時代で約1.48倍）より小さくした分、建物を壊す速さは前と同じくらいに保つ
 const bldK = (era) => (1.48 / ERA_GROW) ** era;
 const upkeepOf = (slots, era) => +(slots * (0.12 + 0.03 * era)).toFixed(2);
 function unitStats(kind, era) {
-  if (kind === 'inf') {
-    const s = ERAS[era].unit;
-    return { ...s, hp: infHp(era), atk: infDps(era) * s.cd, name: INF_NAMES[era], slots: 1, vsB: 1, bk: bldK(era), splash: 0, arc: 0, time: 8,
-      upkeep: upkeepOf(1, era), cost: { food: 20 + era } };
-  }
-  const d = UNITS[kind], up = Math.max(0, era - d.era);
-  return { ...d, hp: d.hp * infHp(era), atk: d.dps * infDps(era) * d.cd, range: d.range + (d.rangeGrow || 0) * up, splash: d.splash || 0, vsB: d.vsB || 1, bk: bldK(era), upkeep: upkeepOf(d.slots, era) };
+  const d = LINES[kind], at = (v) => (Array.isArray(v) ? v[era] : v);
+  era = Math.max(era, d.era);   // まだ作れない時代は、作れる最初の時代の兵として見る
+  return { name: d.names[era], slots: d.slots, hp: d.hp * infHp(era), atk: d.dps * infDps(era) * at(d.cd), cd: at(d.cd),
+    range: at(d.range), speed: at(d.speed), shot: at(d.shot), arc: at(d.arc) || 0, splash: at(d.splash) || 0, vsB: d.vsB || 1,
+    bk: bldK(era), time: d.time, cost: at(d.cost), upkeep: upkeepOf(d.slots, era) };
 }
-// 兵の系統（相性）。得意な系統の兵には COUNTER_MULT 倍のダメージ。時代をまたいで効く
-const UNIT_CLASS = { inf: 'foot', cavalry: 'mobile', tank: 'mobile', archer: 'ranged', robot: 'ranged', cannon: 'siege' };
+// 古い兵を新しい兵にする費用：進化先の兵を新しく作る費用の半分
+function evolveCost(kind, era) {
+  const o = {}, c = unitStats(kind, era).cost;
+  for (const k in c) o[k] = Math.ceil(c[k] / 2);
+  return o;
+}
+// 兵の系統の相性。得意な系統の兵には COUNTER_MULT 倍のダメージ。時代をまたいで効く
 const BEATS = { foot: ['mobile'], mobile: ['ranged', 'siege'], ranged: ['foot'], siege: [] };
 const COUNTER_MULT = 2;
 // 系統ごとの色と形（地図では兵の足もとの板、画面ではボタンの背景に使う）
@@ -379,7 +385,7 @@ const CLASS_INFO = {
   ranged: { name: '射撃系', icon: '🏹', color: 0xc38bff, css: '#c38bff', sides: 4, rot: 0 },            // ひし形
   siege:  { name: '攻城',   icon: '💣', color: 0xd9d2c0, css: '#d9d2c0', sides: 4, rot: Math.PI / 4 },  // 四角
 };
-const classOf = (kind) => UNIT_CLASS[kind];
+const classOf = (kind) => kind;   // 兵の種類は系統そのもの
 function counterMult(a, b) { return BEATS[a].includes(b) ? COUNTER_MULT : 1; }
 function beatenBy(cls) { return Object.keys(BEATS).filter((k) => BEATS[k].includes(cls)); }
 // 攻撃した兵 src が t に当てたときの倍率（建物には vsB × 時代の倍率 bk、兵には相性）。タレットの弾は src なしで1倍
@@ -398,18 +404,24 @@ const BUILD = {
   quarry:   { name: '石切り場', icon: '⛏', cost: { wood: 40 }, hp: 100, time: 10, desc: 'となりの岩場・山1マスごとに石 +0.8/秒。岩場か山のとなりに建てる' },
   house:    { name: '家', icon: '🏠', cost: { wood: 30 }, hp: 120, time: 8, desc: '兵士の上限 +4' },
   lab:      { name: '研究所', icon: '🔭', cost: { wood: 60, stone: 30 }, hp: 100, time: 14, desc: '知識 +1/秒。時代を進めるのに必要' },
-  barracks: { name: '兵舎', icon: '⚔', cost: { wood: 70, stone: 20 }, hp: 160, time: 15, trains: 'inf', desc: '歩兵を1人ずつ作る（食料を使う）。建てた時代の歩兵になる' },
+  barracks: { name: '兵舎', icon: '⚔', cost: { wood: 70, stone: 20 }, hp: 160, time: 15, trains: 'foot',
+              eraNames: ['兵舎', '兵舎', '訓練所', '士官学校', '装甲ドック', '光剣道場'],
+              desc: '歩兵系の兵を1人ずつ作る（食料を使う）。近づいてたたく。建てた時代の兵になる' },
   turret:   { name: 'タレット', icon: '🗼', cost: { wood: 80, stone: 120 }, hp: 220, time: 22, scale: true, desc: '近づいた敵をうつ。建てた時代の形のまま（改修で新しくなる）' },
   rally:    { name: '集合所', icon: '🚩', cost: { wood: 60, stone: 20 }, hp: 200, time: 12, desc: '攻撃に回した兵がここに集まり、出撃を待つ。近くにいると回復する。攻撃目標に一番近い集合所を使う' },
-  range:    { name: '射撃場', icon: '🏹', era: 1, cost: { wood: 90, stone: 30 }, hp: 140, time: 15, trains: 'archer', desc: '弓兵を作る。遠くからうつ' },
+  range:    { name: '射撃場', icon: '🏹', cost: { wood: 90, stone: 30 }, hp: 140, time: 15, trains: 'ranged',
+              eraNames: ['投石場', '射撃場', '弩の砦', '銃の工房', '機関銃陣地', '光線研究棟'],
+              desc: '射撃系の兵を作る。遠くからうつ' },
   wall:     { name: '壁', icon: '🧱', era: 1, cost: { stone: 12 }, hp: 260, time: 4, scale: true, noTerr: true, desc: '敵は通れない（壊すか回り道）。味方は通れる。領土は広がらない' },
-  stable:   { name: '厩舎', icon: '🐎', era: 2, cost: { wood: 140, food: 60 }, hp: 180, time: 18, trains: 'cavalry', desc: '騎兵を作る。速くて強いが、よく食べる' },
+  stable:   { name: '厩舎', icon: '🐎', era: 2, cost: { wood: 140, food: 60 }, hp: 180, time: 18, trains: 'mobile',
+              eraNames: [null, null, '厩舎', '騎兵隊の厩舎', 'バイク整備場', '機械獣の巣'],
+              desc: '機動系の兵を作る。速くて強いが、よく食べる' },
   market:   { name: '市場', icon: '🏪', era: 2, cost: { wood: 150, stone: 100 }, hp: 150, time: 18, desc: '食料・木材・石 +0.6/秒、知識 +0.3/秒' },
   shield:   { name: 'シールド', icon: '🛡', cost: { wood: 120, stone: 180, know: 60 }, hp: 150, era: 3, time: 20, desc: '半径4.5マスのバリア。中の建物と兵士への攻撃を受け止める' },
-  foundry:  { name: '砲兵工場', icon: '💣', era: 3, cost: { wood: 200, stone: 200 }, hp: 220, time: 22, trains: 'cannon', desc: '大砲兵を作る。建物に4倍のダメージ' },
-  tankf:    { name: '戦車工場', icon: '🛞', era: 4, cost: { wood: 250, stone: 350 }, hp: 300, time: 25, trains: 'tank', desc: '戦車を作る。とても固いが、よく食べる' },
+  foundry:  { name: '砲兵工場', icon: '💣', era: 3, cost: { wood: 200, stone: 200 }, hp: 220, time: 22, trains: 'siege',
+              eraNames: [null, null, null, '砲兵工場', 'ロケット工場', '軌道砲基地'],
+              desc: '攻城系の兵を作る。建物だけを狙い、建物に4倍のダメージ。歩兵・機動に守ってもらおう' },
   factory:  { name: '工場', icon: '🏭', era: 4, cost: { wood: 300, stone: 300 }, hp: 260, time: 25, desc: 'まわり3マスの建物の生産と兵づくりが1.5倍速くなる' },
-  robotf:   { name: 'ロボット工場', icon: '🤖', era: 5, cost: { stone: 450, know: 150 }, hp: 300, time: 25, trains: 'robot', desc: 'ロボット兵を作る' },
   teleporter: { name: 'テレポーター', icon: '🌀', era: 5, cost: { stone: 300, know: 250 }, hp: 240, time: 25, desc: '攻撃に出た兵士がここへワープしてから進む。敵の近くに建てよう' },
   capital:  { name: '首都', icon: '🏰', hp: 1000, hidden: true },
   // 地形の予定地（爆破・山・湖・埋め立て）。兵士が作業に行き、敵にも狙われる
@@ -477,9 +489,11 @@ function renoCost(c, key) {
   for (const k in base) o[k] = Math.ceil(base[k] / 2);
   return o;
 }
+// 建物の名前は、時代で変わるものがある（兵を作る建物）
+const buildName = (type, era) => (type === 'turret' ? ERAS[era].turret.name : BUILD[type].eraNames?.[era] || BUILD[type].name);
 function nameOf(b) {
   if (b.type === 'terra') return TOOLS[b.terra].site;
-  return b.type === 'turret' ? ERAS[b.era].turret.name : BUILD[b.type].name;
+  return buildName(b.type, b.era);
 }
 function iconOf(b) { return b.type === 'terra' ? TOOLS[b.terra].icon : BUILD[b.type].icon; }
 const wOf = (t) => t - G.size / 2 + 0.5;          // マス → 世界座標
@@ -700,11 +714,27 @@ function makeBuilding(type, E, color, terra) {
       break;
     }
     case 'barracks': {
-      add(g, GEO.box, wall, 0.85, 0.42, 0.6);
-      add(g, GEO.box, color, 0.9, 0.1, 0.66, 0, 0.42);
-      add(g, GEO.box, 0x3a2a1a, 0.2, 0.28, 0.02, 0, 0, 0.31);
+      // 歩兵系：旗と柵（時代で、木の柵 → 石の訓練所 → 装甲ドック → 光剣道場）
+      if (E <= 1) {
+        add(g, GEO.box, wall, 0.85, 0.42, 0.6);
+        add(g, GEO.box, color, 0.9, 0.1, 0.66, 0, 0.42);
+      } else if (E <= 3) {
+        add(g, GEO.box, wall, 0.85, 0.58, 0.6);
+        for (const x of [-0.32, 0, 0.32]) add(g, GEO.box, wall, 0.16, 0.12, 0.64, x, 0.58);
+        add(g, GEO.box, color, 0.88, 0.06, 0.62, 0, 0.5);
+      } else if (E === 4) {
+        add(g, GEO.box, 0x6d7780, 0.88, 0.5, 0.64);
+        add(g, GEO.box, 0x5b6b4a, 0.5, 0.2, 0.5, -0.12, 0.5);
+        add(g, GEO.box, color, 0.9, 0.08, 0.66, 0, 0.42);
+      } else {
+        add(g, GEO.box, 0xe4edf3, 0.86, 0.5, 0.62);
+        add(g, GEO.box, color, 0.9, 0.06, 0.66, 0, 0.5);
+        add(g, GEO.box, 0xcfd8df, 0.2, 0.04, 0.06, 0.3, 0.56);
+        add(g, GEO.box, 0x4ff0ff, 0.05, 0.6, 0.05, 0.3, 0.6, 0, 0, { e: 1 });
+      }
+      add(g, GEO.box, 0x3a2a1a, 0.2, 0.28, 0.02, 0, 0, 0.32);
       flag(g, color, -0.35, 0.52, 0.2, 0.7);
-      if (E >= 4) add(g, GEO.box, 0x5b6b4a, 0.3, 0.18, 0.4, 0.28, 0.52, -0.05);
+      for (const x of [-0.4, -0.2, 0.2, 0.4]) add(g, GEO.box, E <= 1 ? 0x7a5a36 : wall, 0.05, 0.2, 0.05, x, 0, 0.47);
       break;
     }
     case 'turret': {
@@ -758,11 +788,25 @@ function makeBuilding(type, E, color, terra) {
       break;
     }
     case 'range': {
-      add(g, GEO.box, wall, 0.45, 0.4, 0.4, -0.2, 0, -0.15);
-      add(g, GEO.cone4, color, 0.36, 0.3, 0.36, -0.2, 0.4, -0.15, Math.PI / 4);
-      add(g, GEO.box, 0x6b4a2b, 0.04, 0.32, 0.04, 0.25, 0, 0.2);
-      add(g, GEO.cyl8, 0xf2efe6, 0.18, 0.04, 0.18, 0.25, 0.26, 0.2).rotation.x = Math.PI / 2;
-      add(g, GEO.cyl8, 0xd9443a, 0.09, 0.05, 0.09, 0.25, 0.255, 0.2).rotation.x = Math.PI / 2;
+      // 射撃系：的（時代で、投石場 → 射撃場 → 弩の砦 → 銃の工房 → 機関銃陣地 → 光線研究棟）
+      if (E <= 2) {
+        const h = E === 2 ? 0.55 : 0.4;
+        add(g, GEO.box, wall, 0.45, h, 0.4, -0.2, 0, -0.15);
+        add(g, GEO.cone4, color, 0.36, 0.3, 0.36, -0.2, h, -0.15, Math.PI / 4);
+      } else if (E <= 4) {
+        add(g, GEO.box, E === 3 ? wall : 0x6d7780, 0.5, 0.45, 0.4, -0.2, 0, -0.15);
+        add(g, GEO.box, color, 0.52, 0.07, 0.42, -0.2, 0.45, -0.15);
+        add(g, GEO.cyl8, 0x2a2a2a, 0.05, 0.4, 0.05, -0.2, 0.5, 0.05).rotation.x = Math.PI / 2;
+      } else {
+        add(g, GEO.cylT, wall, 0.3, 0.55, 0.3, -0.2, 0, -0.15);
+        ball(g, 0x4ff0ff, 0.14, -0.2, 0.7, -0.15, { e: 1 }, GEO.ball1).userData.float = true;
+        add(g, GEO.cyl8, color, 0.34, 0.05, 0.34, -0.2, 0.55, -0.15);
+      }
+      for (const [x, z] of E >= 3 ? [[0.25, 0.2], [0.05, 0.34]] : [[0.25, 0.2]]) {
+        add(g, GEO.box, 0x6b4a2b, 0.04, 0.32, 0.04, x, 0, z);
+        add(g, GEO.cyl8, 0xf2efe6, 0.18, 0.04, 0.18, x, 0.26, z).rotation.x = Math.PI / 2;
+        add(g, GEO.cyl8, 0xd9443a, 0.09, 0.05, 0.09, x, 0.255, z).rotation.x = Math.PI / 2;
+      }
       break;
     }
     case 'wall': {
@@ -784,10 +828,28 @@ function makeBuilding(type, E, color, terra) {
       break;
     }
     case 'stable': {
-      add(g, GEO.box, wall, 0.8, 0.42, 0.55);
-      add(g, GEO.cone4, color, 0.6, 0.3, 0.46, 0, 0.42, 0, Math.PI / 4).scale.x = 0.62;
-      add(g, GEO.box, 0x3a2a1a, 0.22, 0.3, 0.02, 0, 0, 0.28);
-      ball(g, 0xe0c24a, 0.13, 0.35, 0.1, 0.35, null, GEO.dode);
+      // 機動系：馬小屋 → 騎兵隊の厩舎 → バイク整備場 → 機械獣の巣
+      if (E === 2) {
+        add(g, GEO.box, wall, 0.8, 0.42, 0.55);
+        add(g, GEO.cone4, color, 0.6, 0.3, 0.46, 0, 0.42, 0, Math.PI / 4).scale.x = 0.62;
+        add(g, GEO.box, 0x3a2a1a, 0.22, 0.3, 0.02, 0, 0, 0.28);
+        ball(g, 0xe0c24a, 0.13, 0.35, 0.1, 0.35, null, GEO.dode);
+      } else if (E === 3) {
+        add(g, GEO.box, wall, 0.9, 0.5, 0.6);
+        add(g, GEO.cone4, color, 0.66, 0.36, 0.5, 0, 0.5, 0, Math.PI / 4).scale.x = 0.62;
+        for (const x of [-0.22, 0.22]) add(g, GEO.box, 0x3a2a1a, 0.2, 0.3, 0.02, x, 0, 0.31);
+        flag(g, color, 0.38, 0.5, 0.2, 0.6);
+      } else if (E === 4) {
+        add(g, GEO.box, 0x6d7780, 0.9, 0.4, 0.6);
+        add(g, GEO.box, color, 0.92, 0.07, 0.62, 0, 0.4);
+        add(g, GEO.box, 0x2a2e33, 0.5, 0.28, 0.02, 0, 0, 0.31);
+        for (const x of [0.28, 0.42]) add(g, GEO.cyl8, 0x222222, 0.14, 0.05, 0.14, x, 0.04, 0.42).rotation.z = Math.PI / 2;
+      } else {
+        add(g, GEO.dome, 0xe4edf3, 0.5, 0.5, 0.5).position.y = 0;
+        add(g, GEO.box, 0x4ff0ff, 0.3, 0.05, 0.02, 0, 0.3, 0.46, 0, { e: 1 });
+        add(g, GEO.box, color, 0.5, 0.05, 0.5, 0, 0.5);
+        for (const [x, z] of [[-0.42, 0.3], [0.42, 0.3], [-0.42, -0.3], [0.42, -0.3]]) add(g, GEO.cone4, 0xcfd8df, 0.1, 0.3, 0.1, x, 0, z);
+      }
       break;
     }
     case 'market': {
@@ -799,28 +861,34 @@ function makeBuilding(type, E, color, terra) {
       break;
     }
     case 'foundry': {
-      add(g, GEO.box, 0x5a5048, 0.8, 0.5, 0.6);
-      add(g, GEO.box, color, 0.82, 0.08, 0.62, 0, 0.5);
-      add(g, GEO.cyl8, 0x3a3430, 0.1, 0.55, 0.1, 0.25, 0.5, -0.15);
-      add(g, GEO.cyl8, 0x2a2a2a, 0.07, 0.4, 0.07, -0.1, 0.12, 0.35).rotation.x = Math.PI / 2 - 0.3;
-      break;
-    }
-    case 'tankf': {
-      add(g, GEO.box, 0x7d8a96, 0.92, 0.55, 0.8);
-      add(g, GEO.box, color, 0.94, 0.1, 0.82, 0, 0.45);
-      add(g, GEO.box, 0x2a2e33, 0.5, 0.36, 0.02, 0, 0, 0.41);
+      // 攻城系：大きな工房（砲兵工場 → ロケット工場 → 軌道砲基地）
+      if (E <= 3) {
+        add(g, GEO.box, 0x5a5048, 0.8, 0.5, 0.6);
+        add(g, GEO.box, color, 0.82, 0.08, 0.62, 0, 0.5);
+        add(g, GEO.cyl8, 0x3a3430, 0.1, 0.55, 0.1, 0.25, 0.5, -0.15);
+        add(g, GEO.cyl8, 0x2a2a2a, 0.07, 0.4, 0.07, -0.1, 0.12, 0.35).rotation.x = Math.PI / 2 - 0.3;
+      } else if (E === 4) {
+        add(g, GEO.box, 0x6d7780, 0.86, 0.5, 0.62);
+        add(g, GEO.box, color, 0.88, 0.08, 0.64, 0, 0.5);
+        for (const x of [-0.25, 0.05]) {
+          add(g, GEO.cyl8, 0xe8e8e8, 0.12, 0.7, 0.12, x, 0.5, -0.1);
+          add(g, GEO.cone6, 0xd9443a, 0.12, 0.18, 0.12, x, 1.2, -0.1);
+        }
+        add(g, GEO.cyl8, 0x2a2e33, 0.07, 0.4, 0.07, 0.3, 0.12, 0.35).rotation.x = Math.PI / 2 - 0.3;
+      } else {
+        add(g, GEO.cyl8, 0xe4edf3, 0.46, 0.3, 0.46);
+        add(g, GEO.box, color, 0.9, 0.06, 0.9, 0, 0.3);
+        add(g, GEO.cyl8, 0xcfd8df, 0.3, 0.45, 0.3, 0, 0.36);
+        const dish = add(g, GEO.cyl8, 0xf0f4f8, 0.62, 0.05, 0.62, 0, 0.9);
+        dish.rotation.x = 0.35;
+        ball(g, 0x4ff0ff, 0.13, 0, 1.12, 0.1, { e: 1 }, GEO.ball1).userData.float = true;
+      }
       break;
     }
     case 'factory': {
       add(g, GEO.box, 0x9a8a7a, 0.86, 0.45, 0.7);
       for (const x of [-0.28, 0, 0.28]) add(g, GEO.cone4, color, 0.2, 0.2, 0.5, x, 0.45, 0, Math.PI / 4).scale.z = 0.5;
       for (const x of [-0.3, 0.3]) add(g, GEO.cyl8, 0x6a5a4a, 0.07, 0.7, 0.07, x, 0.45, -0.28);
-      break;
-    }
-    case 'robotf': {
-      add(g, GEO.box, 0xe4edf3, 0.86, 0.5, 0.7);
-      add(g, GEO.box, 0x4ff0ff, 0.88, 0.06, 0.72, 0, 0.3, 0, 0, { e: 1 });
-      ball(g, color, 0.3, 0, 0.5, 0, null, GEO.ball1).scale.y = 0.18;
       break;
     }
     case 'rally': {
@@ -856,62 +924,126 @@ function makeScaffold() {
 }
 
 // ---------------------------------------------------------------------
-// 兵士の見た目（時代ごとに武器が変わる）
+// 兵士の見た目（系統ごとに形が、時代ごとに武器や乗り物が変わる）
 // ---------------------------------------------------------------------
+const SKIN = 0xf1c9a0;
 function makeUnitMesh(kind, E, color) {
   const g = new THREE.Group();
   const dark = new THREE.Color(color).multiplyScalar(0.6).getHex();
+  // 人の体：胴（cone）と頭
+  const person = (h = 0.42, w = 0.15, body = color) => { add(g, GEO.cone6, body, w, h, w); ball(g, SKIN, w * 0.67, 0, h + 0.08, 0); };
+  const helmet = (y, r) => {
+    if (E >= 2 && E <= 3) ball(g, 0x8a8a8a, r, 0, y, 0).scale.y = 0.06;
+    if (E === 4) ball(g, 0x556b3a, r + 0.005, 0, y + 0.01, 0).scale.y = 0.07;
+    if (E === 5) ball(g, 0xf0f4f8, r + 0.01, 0, y - 0.02, 0, null, GEO.ball1);
+  };
   switch (kind) {
-    case 'archer':
-      add(g, GEO.cone6, color, 0.14, 0.4, 0.14);
-      ball(g, 0xf1c9a0, 0.095, 0, 0.48, 0);
-      add(g, GEO.box, 0x6b4a2b, 0.02, 0.5, 0.1, 0.15, 0.08, 0.04);
-      add(g, GEO.box, 0x8a5a32, 0.07, 0.25, 0.07, -0.05, 0.22, -0.12);
+    case 'foot':
+      // 近づいてたたく：戦士の棍棒 → 槍 → 剣と盾 → サーベル → パワーアーマー → 光の剣
+      if (E === 4) {
+        add(g, GEO.cone6, 0x6d7780, 0.21, 0.46, 0.21);
+        add(g, GEO.box, color, 0.34, 0.07, 0.15, 0, 0.36);
+        ball(g, 0x556b3a, 0.115, 0, 0.58, 0).scale.y = 0.85;
+        add(g, GEO.box, 0xffd84a, 0.12, 0.03, 0.02, 0, 0.58, 0.1, 0, { e: 1 });
+        add(g, GEO.box, 0x3a4048, 0.1, 0.12, 0.2, 0.22, 0.14, 0.08);
+        add(g, GEO.box, 0xcfd8df, 0.04, 0.4, 0.1, 0.22, 0.2, 0.2);
+        return g;
+      }
+      person();
+      helmet(0.54, 0.105);
+      switch (E) {
+        case 0: add(g, GEO.box, 0x6b4a2b, 0.05, 0.36, 0.05, 0.14, 0.12, 0.06); break;
+        case 1: add(g, GEO.box, 0xa07a4a, 0.03, 0.8, 0.03, 0.14, 0.02, 0.05);
+          add(g, GEO.cone4, 0xb0b0b0, 0.04, 0.1, 0.04, 0.14, 0.82, 0.05); break;
+        case 2: add(g, GEO.box, 0xc8c8c8, 0.04, 0.36, 0.04, 0.15, 0.12, 0.08);
+          add(g, GEO.box, dark, 0.2, 0.24, 0.04, -0.12, 0.08, 0.1); break;
+        case 3: add(g, GEO.box, 0xdfe3e6, 0.025, 0.44, 0.05, 0.15, 0.1, 0.1).rotation.z = -0.35;
+          add(g, GEO.box, 0xe0c24a, 0.07, 0.03, 0.07, 0.15, 0.2, 0.08); break;
+        default: add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.12, 0.12, 0.26, 0.08);
+          add(g, GEO.box, 0x4ff0ff, 0.045, 0.045, 0.5, 0.12, 0.26, 0.16, 0, { e: 1 });
+      }
       return g;
-    case 'cavalry':
+    case 'ranged':
+      // 遠くからうつ：投石 → 弓 → 弩 → 銃 → 機関銃 → 光線銃
+      person(0.4, 0.14);
+      helmet(0.52, 0.1);
+      switch (E) {
+        case 0: ball(g, 0x8a8a80, 0.05, 0.16, 0.56, 0.04, null, GEO.dode);
+          add(g, GEO.box, 0x8a5a32, 0.02, 0.2, 0.02, 0.15, 0.32, 0.04); break;
+        case 1: add(g, GEO.box, 0x6b4a2b, 0.02, 0.5, 0.1, 0.15, 0.08, 0.04);
+          add(g, GEO.box, 0x8a5a32, 0.07, 0.25, 0.07, -0.05, 0.22, -0.12); break;
+        case 2: add(g, GEO.box, 0x6b4a2b, 0.3, 0.04, 0.04, 0.1, 0.3, 0.2);
+          add(g, GEO.box, 0x8a5a32, 0.05, 0.05, 0.34, 0.1, 0.28, 0.1); break;
+        case 3: add(g, GEO.box, 0x5a3a22, 0.04, 0.04, 0.55, 0.1, 0.26, 0.15); break;
+        case 4: add(g, GEO.box, 0x2a2a2a, 0.06, 0.07, 0.44, 0.1, 0.26, 0.15);
+          add(g, GEO.box, 0x556b3a, 0.08, 0.1, 0.1, 0.1, 0.16, 0.12); break;
+        default: add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.46, 0.1, 0.26, 0.14);
+          ball(g, 0x4ff0ff, 0.045, 0.1, 0.285, 0.4, { e: 1 });
+      }
+      return g;
+    case 'mobile':
+      if (E === 5) {
+        // 機械獣：4本足の大きなロボット
+        for (const [x, z] of [[-0.13, -0.24], [0.13, -0.24], [-0.13, 0.22], [0.13, 0.22]]) add(g, GEO.box, 0xcfd8df, 0.08, 0.4, 0.08, x, 0, z);
+        add(g, GEO.box, 0xe4edf3, 0.38, 0.24, 0.66, 0, 0.36);
+        add(g, GEO.box, color, 0.4, 0.05, 0.4, 0, 0.6, -0.04);
+        add(g, GEO.box, 0xe4edf3, 0.22, 0.2, 0.24, 0, 0.44, 0.4);
+        add(g, GEO.box, 0x4ff0ff, 0.16, 0.04, 0.02, 0, 0.56, 0.53, 0, { e: 1 });
+        add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.36, 0.12, 0.6, 0.14);
+        return g;
+      }
+      if (E === 4) {
+        // 装甲バイク兵
+        for (const z of [-0.2, 0.2]) add(g, GEO.cyl8, 0x222222, 0.2, 0.06, 0.2, 0, 0.0, z).rotation.z = Math.PI / 2;
+        add(g, GEO.box, 0x2a2e33, 0.14, 0.12, 0.5, 0, 0.12);
+        add(g, GEO.box, color, 0.2, 0.1, 0.3, 0, 0.24);
+        add(g, GEO.cone6, dark, 0.1, 0.26, 0.1, 0, 0.3, -0.08);
+        ball(g, 0x556b3a, 0.075, 0, 0.62, -0.08);
+        add(g, GEO.box, 0x2a2a2a, 0.04, 0.04, 0.34, 0.1, 0.34, 0.16);
+        return g;
+      }
+      // 騎兵・胸甲騎兵
       add(g, GEO.box, 0x7a5030, 0.2, 0.18, 0.5, 0, 0.16, 0);
       for (const [x, z] of [[-0.07, -0.18], [0.07, -0.18], [-0.07, 0.18], [0.07, 0.18]]) add(g, GEO.box, 0x5a3a22, 0.05, 0.16, 0.05, x, 0, z);
       add(g, GEO.box, 0x7a5030, 0.1, 0.2, 0.14, 0, 0.26, 0.28).rotation.x = -0.5;
       add(g, GEO.cone6, color, 0.11, 0.3, 0.11, 0, 0.34, -0.02);
-      ball(g, 0xf1c9a0, 0.08, 0, 0.7, -0.02);
-      add(g, GEO.box, 0xc8c8c8, 0.025, 0.025, 0.6, 0.12, 0.5, 0.2);
+      ball(g, SKIN, 0.08, 0, 0.7, -0.02);
+      if (E === 3) {
+        add(g, GEO.box, 0xdfe3e6, 0.16, 0.14, 0.12, 0, 0.42, -0.02);   // 胸の鎧
+        ball(g, 0xc8c8c8, 0.09, 0, 0.72, -0.02).scale.y = 0.7;          // かぶと
+        add(g, GEO.box, 0xd9443a, 0.03, 0.12, 0.03, 0, 0.8, -0.02);      // 羽根かざり
+        add(g, GEO.box, 0xc8c8c8, 0.025, 0.025, 0.8, 0.12, 0.5, 0.25);  // 長い槍
+      } else add(g, GEO.box, 0xc8c8c8, 0.025, 0.025, 0.6, 0.12, 0.5, 0.2);
       return g;
-    case 'cannon':
+    case 'siege':
+      if (E === 5) {
+        // 軌道砲：キャタピラの上に、空をむく大きな皿
+        for (const x of [-0.17, 0.17]) add(g, GEO.box, 0x2a2e33, 0.1, 0.12, 0.64, x, 0);
+        add(g, GEO.box, 0xe4edf3, 0.3, 0.14, 0.5, 0, 0.12);
+        add(g, GEO.box, color, 0.32, 0.04, 0.2, 0, 0.26, -0.12);
+        add(g, GEO.cyl8, 0xf0f4f8, 0.38, 0.04, 0.38, 0, 0.3, 0.1).rotation.x = -0.5;
+        ball(g, 0x4ff0ff, 0.07, 0, 0.44, 0.2, { e: 1 }, GEO.ball1);
+        return g;
+      }
+      if (E === 4) {
+        // ロケット砲：車輪つきの台に、ロケットが2本
+        for (const x of [-0.17, 0.17]) add(g, GEO.cyl8, 0x2a2e33, 0.11, 0.05, 0.11, x, 0.05).rotation.z = Math.PI / 2;
+        add(g, GEO.box, 0x6d7780, 0.26, 0.08, 0.5, 0, 0.1);
+        for (const x of [-0.07, 0.07]) {
+          const r = add(g, GEO.cyl8, 0xe8e8e8, 0.07, 0.5, 0.07, x, 0.16, 0.06);
+          r.rotation.x = Math.PI / 2 - 0.5;
+          add(g, GEO.cone6, 0xd9443a, 0.07, 0.12, 0.07, x, 0.42, 0.26).rotation.x = Math.PI / 2 - 0.5;
+        }
+        add(g, GEO.cone6, color, 0.1, 0.3, 0.1, 0, 0, -0.28);
+        ball(g, SKIN, 0.07, 0, 0.36, -0.28);
+        return g;
+      }
+      // 大砲兵
       for (const x of [-0.14, 0.14]) add(g, GEO.cyl8, 0x5a3a22, 0.11, 0.04, 0.11, x, 0.11, 0).rotation.z = Math.PI / 2;
       add(g, GEO.cyl8, 0x2a2a2a, 0.07, 0.45, 0.07, 0, 0.14, 0.12).rotation.x = Math.PI / 2 - 0.25;
       add(g, GEO.cone6, color, 0.1, 0.3, 0.1, 0, 0, -0.28);
-      ball(g, 0xf1c9a0, 0.07, 0, 0.36, -0.28);
+      ball(g, SKIN, 0.07, 0, 0.36, -0.28);
       return g;
-    case 'tank':
-      for (const x of [-0.19, 0.19]) add(g, GEO.box, 0x2a2e33, 0.1, 0.14, 0.62, x, 0);
-      add(g, GEO.box, dark, 0.32, 0.14, 0.56, 0, 0.1);
-      add(g, GEO.box, color, 0.24, 0.12, 0.26, 0, 0.24, -0.04);
-      add(g, GEO.cyl8, 0x2a2e33, 0.035, 0.4, 0.035, 0, 0.28, 0.25).rotation.x = Math.PI / 2;
-      return g;
-    case 'robot':
-      for (const x of [-0.07, 0.07]) add(g, GEO.box, 0xcfd8df, 0.06, 0.24, 0.07, x, 0);
-      add(g, GEO.box, 0xe4edf3, 0.24, 0.24, 0.16, 0, 0.24);
-      add(g, GEO.box, color, 0.25, 0.06, 0.17, 0, 0.36);
-      add(g, GEO.box, 0xe4edf3, 0.14, 0.12, 0.12, 0, 0.48);
-      add(g, GEO.box, 0x4ff0ff, 0.1, 0.03, 0.02, 0, 0.53, 0.06, 0, { e: 1 });
-      add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.4, 0.16, 0.3, 0.12);
-      return g;
-  }
-  add(g, GEO.cone6, color, 0.15, 0.42, 0.15);
-  ball(g, 0xf1c9a0, 0.1, 0, 0.5, 0);
-  if (E >= 2 && E <= 3) ball(g, 0x8a8a8a, 0.105, 0, 0.54, 0).scale.y = 0.06;
-  if (E === 4) ball(g, 0x556b3a, 0.11, 0, 0.55, 0).scale.y = 0.07;
-  if (E === 5) ball(g, 0xf0f4f8, 0.115, 0, 0.52, 0, null, GEO.ball1);
-  switch (E) {
-    case 0: add(g, GEO.box, 0x6b4a2b, 0.05, 0.36, 0.05, 0.14, 0.12, 0.06); break;
-    case 1: add(g, GEO.box, 0xa07a4a, 0.03, 0.8, 0.03, 0.14, 0.02, 0.05);
-      add(g, GEO.cone4, 0xb0b0b0, 0.04, 0.1, 0.04, 0.14, 0.82, 0.05); break;
-    case 2: add(g, GEO.box, 0xc8c8c8, 0.04, 0.36, 0.04, 0.15, 0.12, 0.08);
-      add(g, GEO.box, new THREE.Color(color).multiplyScalar(0.6).getHex(), 0.2, 0.24, 0.04, -0.12, 0.08, 0.1); break;
-    case 3: add(g, GEO.box, 0x5a3a22, 0.04, 0.04, 0.5, 0.1, 0.26, 0.15); break;
-    case 4: add(g, GEO.box, 0x2a2a2a, 0.05, 0.05, 0.48, 0.1, 0.26, 0.15); break;
-    default: add(g, GEO.box, 0xf0f4f8, 0.05, 0.05, 0.46, 0.1, 0.26, 0.14);
-      ball(g, 0x4ff0ff, 0.04, 0.1, 0.285, 0.38, { e: 1 });
   }
   return g;
 }
@@ -926,15 +1058,18 @@ for (const [k, ci] of Object.entries(CLASS_INFO)) {
   };
 }
 const PLATE_EDGE = new THREE.MeshBasicMaterial({ color: 0x111822, transparent: true, opacity: 0.7, depthWrite: false });
-function classPlate(kind) {
+// 兵の足もとの板。体の大きい兵は、板が体にかくれないよう大きくする
+function plateScale(kind, era) {
+  return kind === 'mobile' ? (era >= 5 ? 1.7 : 1.2) : kind === 'siege' ? (era >= 4 ? 1.45 : 1.3) : 1;
+}
+function classPlate(kind, scale = 1) {
   const p = PLATE[classOf(kind)], g = new THREE.Group();
   const e = new THREE.Mesh(p.edge, PLATE_EDGE), m = new THREE.Mesh(p.geo, p.mat);
   e.position.y = 0.075; m.position.y = 0.08; e.renderOrder = m.renderOrder = 2;   // 岩場（少し高い）でも埋もれない高さ
   g.add(e, m);
-  g.scale.setScalar(PLATE_SCALE[kind] || 1);   // 体の大きい兵は、板が体にかくれないよう大きくする
+  g.scale.setScalar(scale);
   return g;
 }
-const PLATE_SCALE = { tank: 1.75, cannon: 1.3, cavalry: 1.2 };
 
 const BAR_BG = new THREE.MeshBasicMaterial({ color: 0x220000, depthTest: false, transparent: true, opacity: 0.75 });
 const BAR_P = new THREE.MeshBasicMaterial({ color: 0x46e26a, depthTest: false, transparent: true });
@@ -1340,6 +1475,7 @@ function buildMeshFor(b) {
   if (b.mesh) scene.remove(b.mesh);
   const { group, head } = makeBuilding(b.type, b.era, b.civ.color, b.terra);
   group.position.set(b.x, b.terra ? TERRAIN[G.tiles[b.tz * G.size + b.tx]].h : 0.35, b.z);
+  if (BUILD[b.type].trains) group.add(classPlate(BUILD[b.type].trains, 2.4));   // 兵を作る建物は、系統の色と形の板をしく
   b.mesh = group; b.head = head; b.grow = 0;
   scene.add(group);
 }
@@ -1542,17 +1678,26 @@ function foodIncome(c) {
 // ---------------------------------------------------------------------
 // 兵士
 // ---------------------------------------------------------------------
-function spawnUnit(c, x, z, kind = 'inf', era = c.era) {
-  const s = unitStats(kind, era);
+// 兵の強さ・射程などを、系統 kind の era 時代のものにする（HP は割合を保つ）
+function applyStats(u, kind, era) {
+  const s = unitStats(kind, era), r = u.maxHp ? u.hp / u.maxHp : 1;
+  Object.assign(u, { kind, era, hp: s.hp * r, maxHp: s.hp, atk: s.atk, range: s.range, speed: s.speed * u.jit, cdMax: s.cd,
+    shot: s.shot, splash: s.splash, vsB: s.vsB, bk: s.bk, arc: s.arc, upkeep: s.upkeep, slots: s.slots });
+  if (u.mesh) scene.remove(u.mesh);
+  u.mesh = makeUnitMesh(kind, era, u.civ.color);
+  u.mesh.add(classPlate(kind, plateScale(kind, era)));
+  u.mesh.position.set(u.x, 0.35, u.z);
+  scene.add(u.mesh);
+}
+function spawnUnit(c, x, z, kind = 'foot', era = c.era) {
   const u = {
-    isBuilding: false, civ: c, kind, era, x, z, hp: s.hp, maxHp: s.hp, atk: s.atk, range: s.range,
-    speed: s.speed * (0.9 + Math.random() * 0.2), cdMax: s.cd, cd: Math.random(),
-    shot: s.shot, splash: s.splash, vsB: s.vsB, bk: s.bk, arc: s.arc, upkeep: s.upkeep, slots: s.slots,
+    isBuilding: false, civ: c, x, z, jit: 0.9 + Math.random() * 0.2, cd: Math.random(),
     mode: 'defend', targetCiv: null, targetB: null, target: null, job: null,
     think: Math.random() * 0.3, face: 0, jx: (Math.random() - 0.5) * 0.5, jz: (Math.random() - 0.5) * 0.5,
     phase: Math.random() * 6, lunge: 0, flash: 0, dead: false, moving: false, ax: 0, az: 0,
     readyAt: 0, march: 0, slotFor: null, sx: 0, sz: 0,
   };
+  applyStats(u, kind, era);
   // 首都のまわりの待機場所
   for (let k = 0; k < 12; k++) {
     const a = Math.random() * Math.PI * 2, r = 1.6 + Math.random() * 2.2;
@@ -1560,12 +1705,37 @@ function spawnUnit(c, x, z, kind = 'inf', era = c.era) {
     if (passable(ax, az)) { u.ax = ax; u.az = az; break; }
     u.ax = c.capital.x; u.az = c.capital.z;
   }
-  u.mesh = makeUnitMesh(kind, era, c.color);
-  u.mesh.add(classPlate(kind));
-  u.mesh.position.set(x, 0.35, z);
-  scene.add(u.mesh);
   G.units.push(u);
   return u;
+}
+// ---------------------------------------------------------------------
+// 兵の進化：古い兵を、その系統の建物でいちばん新しい時代の兵にする
+// ---------------------------------------------------------------------
+// 系統 kind の兵を作れる建物のうち、いちばん新しい時代（なければ -1）
+function lineEra(c, kind) {
+  let e = -1;
+  for (const b of G.buildings) if (!b.dead && b.done && b.civ === c && BUILD[b.type].trains === kind) e = Math.max(e, b.era);
+  return e;
+}
+// 進化できる兵（古い順）
+function evolvable(c, kind) {
+  const e = lineEra(c, kind);
+  return G.units.filter((u) => !u.dead && u.civ === c && u.kind === kind && u.era < e).sort((a, b) => a.era - b.era);
+}
+// 系統 kind の古い兵を、費用が足りるかぎり最大 n 人進化させる。進化した人数を返す
+function evolveUnits(c, kind, n = Infinity) {
+  const e = lineEra(c, kind);
+  if (e < 0) return 0;
+  const cost = evolveCost(kind, e);
+  let done = 0;
+  for (const u of evolvable(c, kind)) {
+    if (done >= n || !canAfford(c, cost)) break;
+    pay(c, cost);
+    applyStats(u, kind, e);
+    if (c.isPlayer) ringFx(u.x, u.z, 0xffd84a, 0.9);
+    done++;
+  }
+  return done;
 }
 function passable(x, z) {
   const tx = tOf(x), tz = tOf(z);
@@ -1634,17 +1804,29 @@ function nearestBuilding(c, x, z, r) {
   }
   return best;
 }
+// 自分以外の国の建物で、r マス以内でいちばん近いもの
+function nearestEnemyBuilding(c, x, z, r) {
+  let best = null, bd = r * r;
+  for (const b of G.buildings) {
+    if (b.dead || b.civ === c) continue;
+    const d2 = (b.x - x) ** 2 + (b.z - z) ** 2;
+    if (d2 < bd) { bd = d2; best = b; }
+  }
+  return best;
+}
 // 兵が敵を探す広さ（索敵範囲）。同じ時代の兵なら種類によらず同じ。時代ごとに広がり、どの兵の射程よりも広い
 // （射程より狭いと、長い射程が活かせない）。守っている兵は SIGHT_DEFEND だけ広く探す
 const sightOf = (era) => 4.5 + 0.6 * era, SIGHT_DEFEND = 1.5;
 function pickTarget(u) {
-  const e = findEnemyUnit(u.civ, u.x, u.z, sightOf(u.era) + (u.mode === 'attack' ? 0 : SIGHT_DEFEND));
+  const siege = u.kind === 'siege';   // 攻城は建物だけを狙う。敵の兵が近くにいても無視する（囲まれても反撃しない）
+  const e = siege ? null : findEnemyUnit(u.civ, u.x, u.z, sightOf(u.era) + (u.mode === 'attack' ? 0 : SIGHT_DEFEND));
   if (e) return e;
   if (u.mode === 'attack') {
     // 目標の建物が決まっていれば、途中の建物は無視してまっすぐ向かう
     if (u.targetB && !u.targetB.dead) return u.targetB;
-    return nearestBuilding(u.targetCiv, u.x, u.z, 5.5);
+    return nearestBuilding(u.targetCiv, u.x, u.z, siege ? Math.max(5.5, u.range) : 5.5);
   }
+  if (siege) return nearestEnemyBuilding(u.civ, u.x, u.z, u.range + 1);   // 守り：射程の近くにある敵の建物
   // 守り：自分の領土に入った敵を探す
   let best = null, bd = 22 * 22;
   for (const th of u.civ.threats) {
@@ -1853,7 +2035,7 @@ function unitAttack(u, t) {
   u.cd = u.cdMax; u.lunge = 0.18;
   if (u.range > 2) {
     // 弾は元のダメージと撃った兵を運び、当たった相手ごとに倍率をかける（範囲攻撃で相手の系統がちがうため）
-    const y = u.kind === 'tank' ? 0.62 : u.kind === 'cannon' ? 0.5 : 0.62;
+    const y = u.kind === 'siege' ? 0.5 : 0.62;
     spawnProjectile(u.civ, u.x, y, u.z, t, u.atk, u.splash, u.shot, u.splash ? 11 : 20, u.arc, u);
   } else dealDamage(t, u.atk * hitMult(u, t), u.civ);
 }
@@ -2041,11 +2223,21 @@ function aiTrainPlan(c, mix) {
   const hasGood = trainers.some((b) => !weak.includes(classOf(BUILD[b.type].trains)));
   for (const b of trainers) b.paused = hasGood && weak.includes(classOf(BUILD[b.type].trains));
 }
+// 古い兵を進化させる（人間と同じ費用）。いちばん古い兵が多い系統から、1回に数人だけ
+function aiEvolve(c) {
+  let best = null, bn = 0;
+  for (const kind of Object.keys(LINES)) {
+    const n = evolvable(c, kind).length;
+    if (n > bn) { bn = n; best = kind; }
+  }
+  if (best) evolveUnits(c, best, 3);
+}
 function aiThink(c) {
   const mix = enemyMix(c);
   aiTrainPlan(c, mix);
   const next = ERAS[c.era + 1];
   if (next && canAfford(c, next.cost)) { advanceEra(c); return; }
+  aiEvolve(c);
   // 建築予定地（改修中も含む）が多すぎると守りが空になるので、同時に2つまで
   if (sitesOf(c).length >= 2) return;
   if (Math.random() < 0.25 && aiRenovate(c)) return;
@@ -2058,16 +2250,16 @@ function aiThink(c) {
   if (n.lumber < 2 + E) opts.push(['lumber', 4]);
   if (n.quarry < 1 + E) opts.push(['quarry', 3]);
   if (n.lab < (1 + E) * p.lab) opts.push(['lab', 3 * p.lab]);
-  if (n.barracks < 1 + Math.floor(E / 2) + p.barracks + more('foot')) opts.push(['barracks', 3 * boost('foot')]);
+  // 作戦に focus（兵を多く作る系統）があれば、その系統の建物を多く・ほかの系統は1つだけにする
+  const fo = E >= LINES[p.focus]?.era ? p.focus : null, want = (k, n0) => (!fo ? n0 : fo === k ? n0 + 2 : 1), fw = (k) => (fo === k ? 3 : 1);   // focus の兵が作れるようになるまでは ふつうに建てる
+  if (n.barracks < want('foot', 1 + Math.floor(E / 2) + p.barracks + more('foot'))) opts.push(['barracks', 3 * boost('foot') * fw('foot')]);
   if (n.turret < (1 + E * 0.8) * p.turret) opts.push(['turret', 2.5 * p.turret]);
-  if (E >= 1 && n.range < 1 + (p.barracks > 1 ? 1 : 0) + more('ranged')) opts.push(['range', 2.5 * boost('ranged')]);
-  if (E >= 2 && n.stable < 1 + more('mobile')) opts.push(['stable', 2.5 * boost('mobile')]);
+  if (n.range < want('ranged', 1 + (p.barracks > 1 ? 1 : 0) + more('ranged'))) opts.push(['range', 2.5 * boost('ranged') * fw('ranged')]);
+  if (E >= 2 && n.stable < want('mobile', 1 + more('mobile'))) opts.push(['stable', 2.5 * boost('mobile') * fw('mobile')]);
   if (E >= 2 && n.market < E - 1) opts.push(['market', 2]);
   if (E >= 3 && n.shield < 1) opts.push(['shield', 3]);
-  if (E >= 3 && n.foundry < 1) opts.push(['foundry', 2]);
-  if (E >= 4 && n.tankf < 1 + more('mobile')) opts.push(['tankf', 2 * boost('mobile')]);
+  if (E >= 3 && n.foundry < 1 + (E >= 4 ? 1 : 0)) opts.push(['foundry', 2]);   // 攻城は相性で選ばない（建物をこわす役）
   if (E >= 4 && n.factory < 1) opts.push(['factory', 2]);
-  if (E >= 5 && n.robotf < 1 + more('ranged')) opts.push(['robotf', 2 * boost('ranged')]);
   if (E >= 5 && n.teleporter < (p.barracks ? 1 : 0)) opts.push(['teleporter', 1.5]);
   if (n.house < 1 + E) opts.push(['house', 1.5]);
   while (opts.length) {
@@ -2097,7 +2289,11 @@ function aiWave(c) {
   const target = cands[k];
   // 1回の攻撃の人数は、時間と時代でだんだん増える
   const n = Math.min(Math.ceil(home.length * 0.7), 3 + c.era * 2 + Math.floor(G.time / 90) * 2);
-  for (let i = 0; i < n; i++) setMode(home[i], 'muster');
+  // 攻城は建物しか狙えず、囲まれても反撃しないので、護衛（攻城以外）2人につき1人までしか連れて行かない
+  const escort = home.filter((u) => u.kind !== 'siege').slice(0, n);
+  if (!escort.length) return;
+  const list = [...escort, ...home.filter((u) => u.kind === 'siege').slice(0, Math.floor(escort.length / 2))];
+  for (const u of list) setMode(u, 'muster');
   c.wave = { target, until: G.time + AI_MUSTER_WAIT };
 }
 const AI_MUSTER_WAIT = 20;   // AI は、全員そろうか、この秒数たったら出撃する
@@ -2233,7 +2429,7 @@ function updateBuilding(b, dt) {
       // 兵士が0人になったら、首都から見習いが1人出てくる（建築できなくなるのを防ぐ）
       if (c.unitCount === 0) {
         c.freeT += dt;
-        if (c.freeT >= 15) { c.freeT = 0; c.unitCount++; spawnUnit(c, b.x, b.z + 1.2, 'inf', b.era); }
+        if (c.freeT >= 15) { c.freeT = 0; c.unitCount++; spawnUnit(c, b.x, b.z + 1.2, 'foot', b.era); }
       } else c.freeT = 0;
       break;
     case 'turret': turretFire(b, dt, 1); break;
@@ -2394,7 +2590,7 @@ function buildHudLists() {
       const b = document.createElement('button');
       b.className = 'bbtn'; b.dataset.key = key; b.dataset.kind = kind;
       b.title = def.desc;
-      const nm = key === 'turret' ? ERAS[P.era].turret.name : def.name;
+      const nm = kind === 'build' ? buildName(key, Math.max(P.era, def.era || 0)) : def.name;
       const hot = kind === 'build' && idx < 9 ? `<span class="key">${idx + 1}</span>` : '';
       let cg = '';
       if (def.trains) {
@@ -2412,7 +2608,7 @@ function buildHudLists() {
   mk($('tool-list'), TOOLS, 'tool');
   const t = (k) => classTag(k, true), ar = '<span class="ar">▶</span>';
   $('legend').innerHTML = `${t('foot')}${ar}${t('mobile')}${ar}${t('ranged')}${ar}${t('foot')}<br>`
-    + `${t('mobile')}${ar}${t('siege')}${ar}🏠建物（${UNITS.cannon.vsB}倍）`;
+    + `${t('mobile')}${ar}${t('siege')}${ar}🏠建物（${LINES.siege.vsB}倍）`;
   refreshHud();
 }
 // 相性の説明（ボタン・情報パネル用）
@@ -2421,7 +2617,7 @@ function classTag(cls, short = false) {
   return `<span class="ctag" style="--cc:${ci.css}">${ci.icon}${short ? ci.name.replace('系', '') : ci.name}</span>`;
 }
 function goodText(cls, short = false) {
-  if (cls === 'siege') return short ? '建物' : `建物（${UNITS.cannon.vsB}倍）`;
+  if (cls === 'siege') return short ? '建物' : `建物（${LINES.siege.vsB}倍）`;
   const s = BEATS[cls].map((k) => CLASS_INFO[k].name).join('・');
   return short ? s : `${s}（${COUNTER_MULT}倍）`;
 }
@@ -2952,6 +3148,10 @@ $('info').addEventListener('pointerdown', (ev) => {
   if (act === 'cancel') cancelAndLog(b);
   if (act === 'demo' || act === 'undemo') demolishAt(b);
   if (act === 'pause') b.paused = !b.paused;
+  if (act === 'evolve1' || act === 'evolveAll') {
+    const n = evolveUnits(G.player, BUILD[b.type].trains, act === 'evolve1' ? 1 : Infinity);
+    log(n ? `🧬 ${n}人が進化した` : '資源が足りません', n ? 'good' : 'warn');
+  }
   refreshHud();
 });
 // 選択パネルのボタン（左ボタンだけ）
@@ -3046,7 +3246,7 @@ function updateInfo() {
   if (G.pick && !G.pick.dead) html += pickHtml(G.pick) + '<hr style="border-color:var(--line)">';
   if (G.sel) {
     const def = BUILD[G.sel.key] || TOOLS[G.sel.key];
-    html += `<b>${def.icon} ${def.name}</b><br><span style="color:var(--muted)">${def.desc}</span><br>`;
+    html += `<b>${def.icon} ${buildName(G.sel.key, Math.max(P.era, def.era || 0))}</b><br><span style="color:var(--muted)">${def.desc}</span><br>`;
     if (def.time) html += `🔨 ${G.sel.kind === 'tool' ? '作業の' : '建てる'}時間：兵士1人で${def.time}秒（2人で半分）<br>`;
     if (def.trains) {
       const s = unitStats(def.trains, P.era);
@@ -3105,6 +3305,13 @@ function pickHtml(b) {
   if (def.trains) {
     const s = unitStats(def.trains, b.era);
     h += `<br>作る兵：${s.name}（1人 ${costText(P, s.cost)}・${s.time}秒${slotText(s)}）<br>${counterHtml(def.trains)}<br>食べる量：1人 🍖${s.upkeep}/秒`;
+    if (canRenovate(b)) h += `<br><span style="color:var(--muted)">改修すると：${unitStats(def.trains, P.era).name}を作れる</span>`;
+    const old = evolvable(P, def.trains);
+    if (old.length) {
+      const e = lineEra(P, def.trains);
+      h += `<br>🧬 古い${CLASS_INFO[def.trains].name}の兵が${old.length}人（→ ${unitStats(def.trains, e).name}）`
+        + `<br><button data-act="evolve1">進化 1人</button> <button data-act="evolveAll">進化 全員</button> <span class="cs">1人 ${costText(P, evolveCost(def.trains, e))}</span>`;
+    }
     h += `<br><button data-act="pause">${b.paused ? '▶ 兵づくりを再開' : '⏸ 兵づくりを停止'}</button>`;
   }
   if (b.reno) h += `<br>🔨 改修中 ${Math.floor(b.renoProg * 100)}%（作業中の兵士 ${crew}人）`;
@@ -3241,17 +3448,16 @@ const BAL = {
   // 小さな戦い：[A の兵, A の時代, B の兵, B の時代]。A ＝ 相性で有利な古い兵、B ＝ 不利な新しい兵
   MATCHES: {
     '同じ時代（相性だけの差）': [
-      ['inf', 2, 'cavalry', 2], ['archer', 2, 'inf', 2], ['cavalry', 2, 'archer', 2],
-      ['cavalry', 3, 'cannon', 3], ['inf', 4, 'tank', 4], ['tank', 5, 'robot', 5], ['robot', 5, 'inf', 5],
+      ['foot', 2, 'mobile', 2], ['foot', 4, 'mobile', 4], ['ranged', 2, 'foot', 2], ['ranged', 5, 'foot', 5],
+      ['mobile', 2, 'ranged', 2], ['mobile', 5, 'ranged', 5], ['mobile', 4, 'siege', 4],
     ],
     '1時代差（目標：A が勝つ）': [
-      ['inf', 1, 'cavalry', 2], ['archer', 1, 'inf', 2], ['cavalry', 2, 'archer', 3], ['cavalry', 2, 'cannon', 3],
-      ['archer', 2, 'inf', 3], ['inf', 3, 'tank', 4], ['archer', 3, 'inf', 4], ['tank', 4, 'robot', 5],
-      ['archer', 4, 'inf', 5], ['inf', 4, 'tank', 5],
+      ['foot', 1, 'mobile', 2], ['foot', 3, 'mobile', 4], ['ranged', 1, 'foot', 2], ['ranged', 3, 'foot', 4],
+      ['mobile', 2, 'ranged', 3], ['mobile', 4, 'ranged', 5], ['mobile', 3, 'siege', 4],
     ],
     '2時代差（目標：B が勝つ）': [
-      ['inf', 0, 'cavalry', 2], ['archer', 1, 'inf', 3], ['cavalry', 2, 'archer', 4], ['cavalry', 2, 'cannon', 4],
-      ['inf', 2, 'tank', 4], ['archer', 3, 'inf', 5], ['cavalry', 3, 'robot', 5], ['inf', 3, 'tank', 5],
+      ['foot', 0, 'mobile', 2], ['foot', 2, 'mobile', 4], ['ranged', 0, 'foot', 2], ['ranged', 3, 'foot', 5],
+      ['mobile', 2, 'ranged', 4], ['mobile', 3, 'ranged', 5],
     ],
   },
   // 通しのテストの作戦（PERSONALITY と同じ形）
@@ -3259,6 +3465,9 @@ const BAL = {
     '時代を急ぐ': { name: '時代を急ぐ', wave: 150, barracks: 0, turret: 1.2, lab: 2.2 },
     '兵を増やす': { name: '兵を増やす', wave: 40, barracks: 3, turret: 0.6, lab: 0.7 },
     'バランス':   { name: 'バランス', wave: 70, barracks: 1, turret: 1.0, lab: 1.0 },
+    '歩兵多め':   { name: '歩兵多め', wave: 70, barracks: 1, turret: 1.0, lab: 1.0, focus: 'foot' },
+    '射撃多め':   { name: '射撃多め', wave: 70, barracks: 1, turret: 1.0, lab: 1.0, focus: 'ranged' },
+    '機動多め':   { name: '機動多め', wave: 70, barracks: 1, turret: 1.0, lab: 1.0, focus: 'mobile' },
   },
   // 地形：山・水・森・岩場の多さ（0〜100）
   TERRAINS: {
@@ -3463,7 +3672,7 @@ if (new URLSearchParams(location.search).has('debug')) {
     // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
     step(sec) { for (let t = 0; t < sec && G.phase === 'play'; t += 0.05) update(0.05); },
     // ---- バランステスト用（tools/balance/ と、?debug&watch の観戦パネルが使う） ----
-    unitStats, UNITS, UNIT_CLASS, BEATS, classOf, hitMult, classMix, enemyMix, counterNeed, unitAttack, aiTrainPlan,
+    unitStats, LINES, BEATS, evolveUnits, evolvable, evolveCost, lineEra, aiEvolve, pickTarget, classOf, hitMult, classMix, enemyMix, counterNeed, unitAttack, aiTrainPlan,
     BAL, armiesOf, arena, battleStart, battleState, battle, autoPlayer, startAutoGame,
   };
   if (new URLSearchParams(location.search).has('watch')) initWatch();
