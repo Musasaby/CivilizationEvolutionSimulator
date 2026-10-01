@@ -402,7 +402,7 @@ const BUILD = {
   farm:     { name: '農場', icon: '🌾', cost: { wood: 25 }, hp: 80, time: 8, desc: '食料 +2/秒（新しい時代に建てたものほど多い）' },
   lumber:   { name: '木こり小屋', icon: '🪓', cost: { wood: 15, food: 15 }, hp: 80, time: 8, desc: 'となりの森1マスごとに木材 +0.8/秒。森のとなりに建てる' },
   quarry:   { name: '石切り場', icon: '⛏', cost: { wood: 40 }, hp: 100, time: 10, desc: 'となりの岩場・山1マスごとに石 +0.8/秒。岩場か山のとなりに建てる' },
-  house:    { name: '家', icon: '🏠', cost: { wood: 30 }, hp: 120, time: 8, desc: '兵士の上限 +4' },
+  house:    { name: '家', icon: '🏠', cost: { wood: 30 }, hp: 120, time: 8, desc: '兵士の上限 +4（新しい時代に建てたものほど多い。未来で +9）。上限は家だけで決まる（最大 64）' },
   lab:      { name: '研究所', icon: '🔭', cost: { wood: 60, stone: 30 }, hp: 100, time: 14, desc: '知識 +1/秒。時代を進めるのに必要' },
   barracks: { name: '兵舎', icon: '⚔', cost: { wood: 70, stone: 20 }, hp: 160, time: 15, trains: 'foot',
               eraNames: ['兵舎', '兵舎', '訓練所', '士官学校', '装甲ドック', '光剣道場'],
@@ -1114,7 +1114,7 @@ function newWorld(cfg) {
       res: { food: 100, wood: 150, stone: 60, know: 0 }, alive: true, capital: null,
       ratio: 0, attackTarget: null, targetB: null, upkeep: 0, starve: 0, freeT: 0, workT: 0, balT: 0,
       pers: e ? PERSONALITY[e.pers] : null, growth: e ? e.growth : 1,
-      waveTimer: 0, thinkTimer: 1 + Math.random() * 2, unitCount: 0, popCap: 3, threats: [], kills: 0,
+      waveTimer: 0, thinkTimer: 1 + Math.random() * 2, unitCount: 0, popCap: 0, threats: [], kills: 0,
       rallyB: null, rallyT: 0, wave: null,
       cx: Math.round(S / 2 - 0.5 + Math.cos(ang) * r), cz: Math.round(S / 2 - 0.5 + Math.sin(ang) * r),
     });
@@ -1551,6 +1551,7 @@ function finishReno(b) {
   b.maxHp = baseHp(b); b.hp = b.maxHp * r;
   if (b.type === 'shield') { b.shieldMax = shieldMax(b.era); b.shieldHp = b.shieldMax; }
   buildMeshFor(b);
+  recalcPop(b.civ);   // 家は、改修で上限がふえる
   ringFx(b.x, b.z, 0xffd84a, 3);
   if (b.civ.isPlayer) log(`🔨 ${old}を改修した → ${ERAS[b.era].name}の${nameOf(b)}`, 'good');
 }
@@ -1642,11 +1643,13 @@ function calcAdj(b) {
   if (b.type === 'lumber') b.adj = Math.min(5, adjCount(b.tx, b.tz, [T.FOREST]));
   if (b.type === 'quarry') b.adj = Math.min(5, adjCount(b.tx, b.tz, [T.ROCK, T.MOUNTAIN]));
 }
+// 兵士の上限は、家だけで決まる。家1つの上限は、その家を建てた（改修した）時代で変わる（石器 4 → 未来 9）
+const housePop = (era) => 4 + era;
+const MAX_POP = 64;   // 兵士が多すぎると重くなるので、どの時代でもここまで（未来の家なら 8 つで届く）
 function recalcPop(c) {
-  let h = 0;
-  for (const b of G.buildings) if (!b.dead && b.done && b.civ === c && b.type === 'house') h++;
-  // 兵士が多すぎると重くなるので、時代ごとに上限をつける
-  c.popCap = Math.min(3 + h * 4 + c.era, 24 + c.era * 4);
+  let n = 0;
+  for (const b of G.buildings) if (!b.dead && b.done && b.civ === c && b.type === 'house') n += housePop(b.era);
+  c.popCap = Math.min(n, MAX_POP);
 }
 function countB(c) {
   const n = {};
@@ -2181,7 +2184,7 @@ function findSpot(c, type) {
 }
 // いちばん古い、大事な建物を改修する
 function aiRenovate(c) {
-  const order = ['turret', 'barracks', 'range', 'stable', 'foundry', 'farm', 'lab', 'shield'];
+  const order = ['turret', 'barracks', 'range', 'stable', 'foundry', 'farm', 'lab', 'shield', 'house'];
   let best = null;
   for (const b of G.buildings) {
     if (b.civ !== c || !canRenovate(b) || !order.includes(b.type)) continue;
@@ -3292,6 +3295,7 @@ function pickHtml(b) {
     h += '<br><button data-act="undemo">↩ 撤去をやめる</button>';
     return h;
   }
+  if (b.type === 'house') h += `<br>兵士の上限 +${housePop(b.era)}（全体 ${P.popCap}/${MAX_POP}）`;
   if (b.type === 'shield') h += `<br>バリア ${Math.ceil(b.shieldHp)} / ${b.shieldMax}`;
   if (b.type === 'rally') {
     h += rallyOf(P) === b
@@ -3663,7 +3667,7 @@ function initWatch() {
 if (new URLSearchParams(location.search).has('debug')) {
   window.ces = {
     get G() { return G; }, camera, controls, advanceEra, placeBuilding, spawnUnit, findSpot, aiThink, orderAttack, setRatio,
-    startReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
+    startReno, finishReno, costOf, canAfford, pay, countB, sitesOf, foodIncome, PERSONALITY, BUILD, ERAS,
     T, TOOLS, useTool, demolishAt, startDemolish, stopDemolish, cancelSite, terraWhy, allConnected,
     setMultiMode, boxSelect, multiGroups, get multiRing() { return multiRing; },
     rallyOf, playerSortie, playerRetreat, aiWave, musterOf, get rallyLabel() { return rallyLabel; },
