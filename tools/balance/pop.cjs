@@ -1,4 +1,4 @@
-// 兵士の上限のテスト：家だけで決まり、家を建てた時代で変わる。最大 64。使い方：node pop.cjs
+// 兵士の上限のテスト：家だけで決まり、家を建てた時代で変わる。最大 99。使い方：node pop.cjs
 const { openGame } = require('./common.cjs');
 let fails = 0;
 const ok = (cond, name, extra = '') => { console.log(`${cond ? 'PASS' : 'FAIL'} ${name} ${extra}`); if (!cond) fails++; };
@@ -31,7 +31,7 @@ const ok = (cond, name, extra = '') => { console.log(`${cond ? 'PASS' : 'FAIL'} 
     for (let i = 0; i < 12; i++) ces.placeBuilding(c, 'house', c.capital.tx + 2 + (i % 6), c.capital.tz - 2 - ((i / 6) | 0), true);
     return { cap: c.popCap, houses: G.buildings.filter((b) => b.civ === c && b.type === 'house').length };
   });
-  ok(m.cap === 64, '未来の家をたくさん建てても最大 64', JSON.stringify(m));
+  ok(m.cap === 99, '未来の家をたくさん建てても最大 99', JSON.stringify(m));
   await browser.close();
   console.log(fails ? `\n${fails} 件 FAIL` : '\nすべて PASS');
   process.exit(fails ? 1 : 0);
