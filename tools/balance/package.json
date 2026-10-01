@@ -1,0 +1,12 @@
+{
+  "name": "ces-balance",
+  "private": true,
+  "description": "兵種の相性と時代の強さをはかる自動バランステスト",
+  "scripts": {
+    "skirmish": "node skirmish.cjs",
+    "fullrun": "node fullrun.cjs"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.63.0"
+  }
+}
