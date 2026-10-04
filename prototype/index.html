@@ -3675,6 +3675,16 @@ if (new URLSearchParams(location.search).has('debug')) {
     screenOf(b) { _p.set(b.x, 0.35, b.z).project(camera); return { x: (_p.x + 1) / 2 * innerWidth, y: (1 - _p.y) / 2 * innerHeight }; },
     // ゲーム内の時間を sec 秒ぶん、画面を待たずに進める
     step(sec) { for (let t = 0; t < sec && G.phase === 'play'; t += 0.05) update(0.05); },
+    // ゲームの今の状態を1つのオブジェクトで返す（テスト用）。ゲーム開始前は null
+    summary() {
+      if (!G) return null;
+      return {
+        phase: G.phase, time: G.time, era: G.maxEra, eraName: ERAS[G.maxEra].name,
+        resources: { ...G.player.res },
+        units: G.units.filter((u) => !u.dead && u.civ === G.player).length,
+        buildings: G.buildings.filter((b) => !b.dead && b.civ === G.player).length,
+      };
+    },
     // ---- バランステスト用（tools/balance/ と、?debug&watch の観戦パネルが使う） ----
     unitStats, LINES, BEATS, evolveUnits, evolvable, evolveCost, lineEra, aiEvolve, pickTarget, classOf, hitMult, classMix, enemyMix, counterNeed, unitAttack, aiTrainPlan,
     BAL, armiesOf, arena, battleStart, battleState, battle, autoPlayer, startAutoGame,

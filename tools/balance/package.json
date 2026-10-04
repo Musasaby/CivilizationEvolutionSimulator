@@ -3,6 +3,7 @@
   "private": true,
   "description": "兵種の相性と時代の強さをはかる自動バランステスト",
   "scripts": {
+    "smoke": "node smoke.cjs",
     "skirmish": "node skirmish.cjs",
     "fullrun": "node fullrun.cjs"
   },
