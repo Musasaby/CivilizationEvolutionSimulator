@@ -1,0 +1,28 @@
+{
+  "source": "tmp/PLAN-workflow-smoke.md",
+  "branch": "develop/agent-workflow-setup",
+  "updated_at": "2026-10-04T13:19:28+09:00",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "デバッグ API に ces.summary() を追加する",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T2",
+      "title": "煙テスト tools/balance/smoke.cjs を追加する",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    },
+    {
+      "id": "T3",
+      "title": "AGENTS.md に煙テストの実行方法を書く",
+      "status": "pending",
+      "retries": 0,
+      "commit": null
+    }
+  ]
+}
