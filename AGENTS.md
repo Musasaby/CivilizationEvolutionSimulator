@@ -9,6 +9,7 @@
 
 ## 確認
 - `?debug` 付きで開くと `window.ces` が使える。`ces.step(秒)` で時間を進める
+- 煙テスト（ゲームが自動で動くかの簡単チェック）は `cd tools/balance && npm run smoke` で実行できる
 - Playwright で確かめる
 
 ## ルール
